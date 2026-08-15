@@ -29,6 +29,8 @@ export interface HyroView {
   /** Clignotement d'invulnerabilite (0 = visible). */
   blink: number;
   scale: number;
+  /** Hauteur au-dessus du sol (saut, plateforme). L'ombre reste au sol. */
+  z?: number;
 }
 
 /** Chat heroique : Hyro. */
@@ -44,7 +46,11 @@ export function drawHyro(ctx: Ctx, v: HyroView) {
   const lean = v.state === 'dash' ? 0.22 : 0;
 
   ctx.save();
-  groundShadow(ctx, v.x, v.y + 3, s * 1.15, s * 0.42, 0.32);
+  const z = v.z ?? 0;
+  const zk = 1 - Math.min(0.45, z / 120);
+  groundShadow(ctx, v.x, v.y + 3, s * 1.15 * zk, s * 0.42 * zk, 0.32 * zk);
+  // Tout le corps est remonte de z : l'ombre au sol donne la lecture verticale.
+  ctx.translate(0, -z);
 
   if (v.state === 'glide') {
     // Cape planeur deployee
@@ -302,6 +308,8 @@ export interface MouseView {
   alpha: number;
   scale: number;
   glued: boolean;
+  /** Souris perchee sur une structure : legere surelevation visuelle. */
+  perched?: boolean;
 }
 
 export function drawMouse(ctx: Ctx, v: MouseView) {
@@ -319,6 +327,8 @@ export function drawMouse(ctx: Ctx, v: MouseView) {
   ctx.save();
   ctx.globalAlpha = v.alpha;
   groundShadow(ctx, v.x, v.y + 2, s * 1.1, s * 0.4, 0.26 * v.alpha);
+  // Une souris perchee est dessinee un peu plus haut que son ombre.
+  if (v.perched) ctx.translate(0, -10);
 
   // Queue
   const tail = Math.sin(v.anim * (v.stunned ? 2 : 11)) * s * 0.5;

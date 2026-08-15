@@ -47,6 +47,7 @@ export const PROFILES: Record<MouseKind, Profile> = {
 };
 
 const CAPS: MoveCaps = {};
+const PERCHED_CAPS: MoveCaps = { ledge: true };
 
 export class MouseEnt implements IMouse {
   id: string;
@@ -60,6 +61,8 @@ export class MouseEnt implements IMouse {
   glue = 0;
   captured = false;
   dead = false;
+  /** Souris perchee : elle vit sur une structure surelevee. */
+  perched = false;
   /** Opacite courante (souris Ombre / cachee). */
   alpha = 1;
   visible = true;
@@ -89,6 +92,7 @@ export class MouseEnt implements IMouse {
     this.home = { x: spawn.x, y: spawn.y };
     this.target = { x: spawn.x, y: spawn.y };
     this.hideAt = spawn.hideAt ?? null;
+    this.perched = !!spawn.perched;
     this.r = 12 * this.prof.scale;
     this.dir = Math.random() * TAU;
   }
@@ -100,6 +104,9 @@ export class MouseEnt implements IMouse {
   /** Une souris est capturable au filet si elle est au sol et pas trop rapide. */
   canBeCaught(w: IWorld): boolean {
     if (this.captured || this.dead) return false;
+    // Une souris perchee n'est atteignable que si Hyro est lui aussi en
+    // hauteur : sur la structure, en plein saut, ou en vol plane.
+    if (this.perched && !w.player.elevated) return false;
     if (this.stun > 0 || this.glue > 0) return true;
     if (this.prof.shadow && !w.radarActive && this.revealed <= 0) return false;
     if (this.hiddenIn && !w.radarActive && this.revealed <= 0) return false;
@@ -109,6 +116,7 @@ export class MouseEnt implements IMouse {
 
   /** Raison affichee au joueur quand la capture echoue. */
   whyNot(w: IWorld): string {
+    if (this.perched && !w.player.elevated) return 'En hauteur — saute !';
     if (this.prof.shadow && !w.radarActive && this.revealed <= 0) return 'Radar requis';
     if (this.prof.needsStun && this.kind === 'green') return 'Trop rapide !';
     if (this.prof.needsStun) return 'Assomme-la !';
@@ -204,7 +212,7 @@ export class MouseEnt implements IMouse {
     }
 
     // Le leurre a fromage detourne meme une souris en patrouille
-    if (w.lurePoint && (this.state === 'patrol' || this.state === 'alert')) {
+    if (!this.perched && w.lurePoint && (this.state === 'patrol' || this.state === 'alert')) {
       const dl = dist(this.x, this.y, w.lurePoint.x, w.lurePoint.y);
       if (dl < 520) {
         this.state = 'lured';
@@ -219,7 +227,8 @@ export class MouseEnt implements IMouse {
   }
 
   private moveTowards(dt: number, w: IWorld, tx: number, ty: number, speed: number, away = false) {
-    const s = w.nav.steer(this.x, this.y, this.r, tx, ty, CAPS, away);
+    const caps = this.perched ? PERCHED_CAPS : CAPS;
+    const s = w.nav.steer(this.x, this.y, this.r, tx, ty, caps, away);
     const vx = s.x * speed;
     const vy = s.y * speed;
     if (Math.abs(vx) > 1 || Math.abs(vy) > 1) {
@@ -228,7 +237,20 @@ export class MouseEnt implements IMouse {
     } else {
       this.move = damp(this.move, 0, 8, dt);
     }
-    w.nav.moveAndSlide(this, vx * dt, vy * dt, CAPS);
+    if (this.perched) {
+      // Elle ne quitte jamais sa plateforme : tout pas qui l'en ferait
+      // descendre est annule.
+      const bx = this.x;
+      const by = this.y;
+      w.nav.moveAndSlide(this, vx * dt, vy * dt, caps);
+      if (w.nav.terrainAt(this.x, this.y) !== TERR.LEDGE) {
+        this.x = bx;
+        this.y = by;
+        this.move = 0;
+      }
+      return;
+    }
+    w.nav.moveAndSlide(this, vx * dt, vy * dt, caps);
   }
 
   private doPatrol(dt: number, w: IWorld) {
@@ -272,7 +294,7 @@ export class MouseEnt implements IMouse {
     }
     this.moveTowards(dt, w, tx, ty, this.prof.fleeSpeed, true);
     if (this.lastSeen <= 0 && this.timer <= 0) {
-      const spot = this.nearestHideSpot(w);
+      const spot = this.perched ? null : this.nearestHideSpot(w);
       if (spot) this.hideAt = spot;
       if (this.hideAt && Math.random() < this.prof.hides) {
         this.state = 'hide';
@@ -380,6 +402,7 @@ export class MouseEnt implements IMouse {
       x: this.x, y: this.y, dir: this.dir, move: this.move, anim: this.anim,
       kind: this.kind, stunned: this.stun > 0, alerted: this.alerted > 0,
       alpha: this.alpha, scale: PROFILES[this.kind].scale, glued: this.glue > 0,
+      perched: this.perched,
     };
   }
 

@@ -775,24 +775,65 @@ export class WorldRenderer {
       ctx.fillStyle = g;
       ctx.fillRect(x - 4, y + CELL, CELL + 8, 26);
     }
-    ctx.fillStyle = shade(p.groundAlt, 0.14);
-    ctx.fillRect(x, y, CELL, CELL);
-    ctx.fillStyle = 'rgba(255,255,255,0.07)';
-    ctx.fillRect(x + 3, y + 3, CELL - 6, CELL - 6);
-    // Motif de passerelle
-    ctx.strokeStyle = rgba(p.wallLine, 0.5);
-    ctx.lineWidth = 2;
-    for (let i = 0; i < 4; i++) {
-      ctx.beginPath();
-      ctx.moveTo(x, y + i * 16 + 8);
-      ctx.lineTo(x + CELL, y + i * 16 + 8);
-      ctx.stroke();
+    // Chaque monde a son materiau de plateforme : la verticalite doit se lire
+    // instantanement, sans confondre le dessus d'une structure et le sol.
+    const n2 = hash2(cx, cy, this.level.seed + 11);
+    let top = '#a9773f';
+    let face = '#6b4a24';
+    switch (this.level.def.layout) {
+      case 'garden': top = '#b98552'; face = '#6f4c2a'; break; // terrasse en bois
+      case 'market': top = '#8a6a86'; face = '#4a3350'; break; // toit d'etal
+      case 'sewer': top = '#6d7a74'; face = '#39443f'; break; // passerelle metal
+      case 'rooftop': top = '#5d6684'; face = '#2f3750'; break; // toiture surelevee
+      default: top = '#7d6a58'; face = '#443830'; break; // caillebotis d'usine
     }
+    ctx.fillStyle = shade(top, (n2 - 0.5) * 0.1);
+    ctx.fillRect(x, y, CELL, CELL);
+
+    if (this.level.def.layout === 'garden' || this.level.def.layout === 'market') {
+      // Planches
+      ctx.strokeStyle = rgba(face, 0.5);
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 4; i++) {
+        ctx.beginPath();
+        ctx.moveTo(x, y + i * 16 + 8);
+        ctx.lineTo(x + CELL, y + i * 16 + 8);
+        ctx.stroke();
+      }
+      ctx.fillStyle = 'rgba(255,255,255,0.1)';
+      for (let i = 0; i < 4; i++) ctx.fillRect(x, y + i * 16 + 2, CELL, 2);
+    } else {
+      // Caillebotis metallique
+      ctx.strokeStyle = rgba(face, 0.55);
+      ctx.lineWidth = 1.6;
+      for (let i = 0; i <= 4; i++) {
+        ctx.beginPath();
+        ctx.moveTo(x, y + i * 16);
+        ctx.lineTo(x + CELL, y + i * 16);
+        ctx.moveTo(x + i * 16, y);
+        ctx.lineTo(x + i * 16, y + CELL);
+        ctx.stroke();
+      }
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.fillRect(x + 2, y + 2, CELL - 4, 2);
+    }
+
+    // Rebord clair sur les cotes exposes : c'est ce qui donne le relief
+    const edge = (dx: number, dy: number) => this.neighbour(cx + dx, cy + dy) !== TERR.LEDGE;
+    ctx.fillStyle = 'rgba(255,255,255,0.24)';
+    if (edge(0, -1)) ctx.fillRect(x, y, CELL, 4);
+    if (edge(-1, 0)) ctx.fillRect(x, y, 4, CELL);
+    if (edge(1, 0)) ctx.fillRect(x + CELL - 4, y, 4, CELL);
+
     if (belowOpen) {
-      ctx.fillStyle = rgba(p.wallLine, 0.9);
-      ctx.fillRect(x, y + CELL - 14, CELL, 14);
-      ctx.fillStyle = 'rgba(255,255,255,0.16)';
-      ctx.fillRect(x, y + CELL - 14, CELL, 2);
+      // Face avant : la hauteur de la structure
+      const g2 = ctx.createLinearGradient(x, y + CELL - 18, x, y + CELL);
+      g2.addColorStop(0, shade(face, 0.12));
+      g2.addColorStop(1, face);
+      ctx.fillStyle = g2;
+      ctx.fillRect(x, y + CELL - 18, CELL, 18);
+      ctx.fillStyle = 'rgba(255,255,255,0.22)';
+      ctx.fillRect(x, y + CELL - 18, CELL, 2);
     }
   }
 

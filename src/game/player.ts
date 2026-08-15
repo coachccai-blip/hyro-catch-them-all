@@ -15,9 +15,16 @@ const SPEED = 268;
 const SPEED_SKATE = 452;
 const ACCEL = 14;
 const ACCEL_SKATE = 6.5;
-const NET_RANGE = 210;
-const NET_RADIUS = 66;
+/** Longueur d'un « chat » : c'est l'unite de portee du filet. */
+const CAT_LENGTH = 78;
+const NET_RANGE = CAT_LENGTH;
+const NET_RADIUS = 58;
 const NET_COOLDOWN = 0.5;
+// --- Saut ---------------------------------------------------------------
+const JUMP_TIME = 0.46;
+const JUMP_DIST = 118;
+const JUMP_HEIGHT = 44;
+const JUMP_COOLDOWN = 0.12;
 const NET_STRIKE_AT = 0.42;
 const SWORD_COOLDOWN = 0.36;
 const SWORD_RANGE = 104;
@@ -38,6 +45,7 @@ export interface PlayerCmd {
   aimY: number;
   net: boolean;
   sword: boolean;
+  jump: boolean;
   gadget: boolean;
   gadgetHeld: boolean;
   cycle: number;
@@ -70,7 +78,11 @@ export class Player {
   skating = false;
   gliding = false;
   dashing = false;
+  /** Hyro se tient sur une structure surelevee. */
   onLedge = false;
+  /** Hauteur visuelle courante (saut). */
+  z = 0;
+  jumping = false;
 
   private vx = 0;
   private vy = 0;
@@ -93,6 +105,10 @@ export class Player {
   private pullTo: Vec2 = { x: 0, y: 0 };
   private radarTimer = 0;
   private winTimer = 0;
+  private jumpTimer = 0;
+  private jumpCd = 0;
+  private jumpVx = 0;
+  private jumpVy = 0;
   /** Trainee de dash / patins. */
   trail: { x: number; y: number; life: number }[] = [];
 
@@ -105,10 +121,21 @@ export class Player {
 
   get caps(): MoveCaps {
     return {
-      gap: this.dashing || this.gliding,
+      // En l'air, on survole gouffres et rebords : c'est ce qui permet de
+      // sauter d'une structure a l'autre.
+      gap: this.dashing || this.gliding || this.jumping,
       water: false,
-      ledge: this.onLedge,
+      ledge: this.onLedge || this.jumping,
     };
+  }
+
+  /** Hyro est-il en hauteur (perche ou en plein saut) ? */
+  get elevated(): boolean {
+    return this.onLedge || this.jumping || this.gliding;
+  }
+
+  get airborne(): boolean {
+    return this.jumping || this.gliding;
   }
 
   get current(): GadgetId | null {
@@ -180,6 +207,40 @@ export class Player {
     }
     if (cmd.gadget && g) this.useGadget(g, w, cmd);
 
+    // --- Saut ---------------------------------------------------------------
+    this.jumpCd = Math.max(0, this.jumpCd - dt);
+    if (this.jumpTimer > 0) {
+      this.jumpTimer -= dt;
+      const k = clamp01(1 - this.jumpTimer / JUMP_TIME);
+      this.z = Math.sin(k * Math.PI) * JUMP_HEIGHT;
+      this.jumping = this.jumpTimer > 0;
+      w.nav.moveAndSlide(this, this.jumpVx * dt, this.jumpVy * dt, this.caps);
+      this.move = 1;
+      if (!this.jumping) this.land(w);
+      // On peut viser et lancer le filet en plein saut (plongeon sur la proie)
+      this.updateNet(dt, w, cmd);
+      this.updateTrail(dt);
+      this.state = 'run';
+      return;
+    }
+    this.jumping = false;
+    this.z = damp(this.z, 0, 18, dt);
+
+    if (cmd.jump && this.jumpCd <= 0 && this.dashTimer <= 0) {
+      this.jumpTimer = JUMP_TIME;
+      this.jumping = true;
+      const l = Math.hypot(cmd.moveX, cmd.moveY);
+      const dx = l > 0.1 ? cmd.moveX / l : Math.cos(this.dir);
+      const dy = l > 0.1 ? cmd.moveY / l : Math.sin(this.dir);
+      // Saut sur place si aucune direction n'est donnee
+      const dist0 = l > 0.1 ? JUMP_DIST : 0;
+      this.jumpVx = (dx * dist0) / JUMP_TIME;
+      this.jumpVy = (dy * dist0) / JUMP_TIME;
+      if (l > 0.1) this.dir = Math.atan2(dy, dx);
+      w.sfx('dash');
+      w.fx.dust(this.x, this.y + 4, 'rgba(255,255,255,0.65)', 5);
+    }
+
     // --- Dash ---------------------------------------------------------------
     if (this.dashTimer > 0) {
       this.dashTimer -= dt;
@@ -224,8 +285,13 @@ export class Player {
       w.nav.moveAndSlide(this, this.vx * dt * 0.45, this.vy * dt * 0.45, this.caps);
     }
 
-    // Sortie de plateforme : on redevient "au sol"
-    if (this.onLedge && w.nav.terrainAt(this.x, this.y) !== TERR.LEDGE) this.onLedge = false;
+    // Sortie de plateforme : Hyro redescend au sol (petite retombee)
+    if (this.onLedge && w.nav.terrainAt(this.x, this.y) !== TERR.LEDGE) {
+      this.onLedge = false;
+      this.z = 22;
+      w.fx.dust(this.x, this.y + 4, 'rgba(255,255,255,0.5)', 4);
+      w.sfx('step', 0);
+    }
 
     // --- Sol dangereux ------------------------------------------------------
     if (terrain === TERR.HAZARD && !this.skating && !this.gliding) {
@@ -300,9 +366,47 @@ export class Player {
     if (this.trail.length > 40) this.trail.splice(0, this.trail.length - 40);
   }
 
+  /** Reception du saut : on determine si Hyro atterrit sur une structure. */
+  private land(w: IWorld) {
+    this.jumpCd = JUMP_COOLDOWN;
+    const wasUp = this.onLedge;
+    let t = w.nav.terrainAt(this.x, this.y);
+
+    // Aide a l'escalade : si le saut depasse de peu une plateforme, on
+    // rattrape le rebord au lieu de retomber betement derriere. Uniquement
+    // en montant — descendre d'une plateforme reste libre.
+    if (t !== TERR.LEDGE && !wasUp) {
+      const l = Math.hypot(this.jumpVx, this.jumpVy);
+      if (l > 1) {
+        const ux = this.jumpVx / l;
+        const uy = this.jumpVy / l;
+        for (const back of [16, 30, 44, 58]) {
+          const px = this.x - ux * back;
+          const py = this.y - uy * back;
+          if (w.nav.terrainAt(px, py) === TERR.LEDGE
+            && !w.nav.blocked(px, py, this.r, { ledge: true })) {
+            this.x = px;
+            this.y = py;
+            t = TERR.LEDGE;
+            break;
+          }
+        }
+      }
+    }
+    this.jumpVx = 0;
+    this.jumpVy = 0;
+    this.onLedge = t === TERR.LEDGE;
+    w.fx.dust(this.x, this.y + 4, 'rgba(255,255,255,0.55)', 6);
+    if (this.onLedge && !wasUp) {
+      w.sfx('step', 1);
+      w.shake(2);
+    }
+    this.checkFall(w);
+  }
+
   /** Chute dans un gouffre / le vide : perte d'un coeur et retour au bord. */
   private checkFall(w: IWorld) {
-    if (this.dashing || this.gliding) return;
+    if (this.dashing || this.gliding || this.jumping) return;
     const t = w.nav.terrainAt(this.x, this.y);
     if (t === TERR.GAP || t === TERR.VOID) {
       this.hurt(1, this.x, this.y, w, true);
@@ -564,7 +668,7 @@ export class Player {
       x: this.x, y: this.y, dir: this.dir, move: this.move, anim: this.anim,
       state: this.state, action: this.action,
       blink: this.invuln > 0 && this.blinkPhase > 1 ? 1 : 0,
-      scale: 1,
+      scale: 1, z: this.z + (this.onLedge ? 10 : 0),
     };
   }
 
@@ -581,28 +685,47 @@ export class Player {
     drawHyro(ctx, this.view());
   }
 
-  /** Reticule de visee du filet (dessine sous les entites). */
+  /**
+   * Reticule de visee du filet.
+   * Le cercle colle EXACTEMENT au curseur (aucun magnetisme, aucun lissage).
+   * Hors de portee il passe au rouge, et un cercle fantome montre ou le coup
+   * partira reellement — la portee du filet est d'un chat.
+   */
   drawReticle(ctx: Ctx, aimX: number, aimY: number, t: number) {
     const aimAng = Math.atan2(aimY - this.y, aimX - this.x);
-    const d = Math.min(NET_RANGE, dist(this.x, this.y, aimX, aimY));
-    const px = this.x + Math.cos(aimAng) * d;
-    const py = this.y + Math.sin(aimAng) * d;
+    const raw = dist(this.x, this.y, aimX, aimY);
+    const d = Math.min(NET_RANGE, raw);
+    const cx = this.x + Math.cos(aimAng) * d;
+    const cy = this.y + Math.sin(aimAng) * d;
+    const inRange = raw <= NET_RANGE + 1;
     const ready = this.netTimer <= 0;
-    const col = ready ? '#ffffff' : '#8a8a9a';
+    const col = !inRange ? '#ff8a7a' : ready ? '#ffffff' : '#8a8a9a';
     ctx.save();
-    ctx.globalAlpha = 0.85;
-    dashedCircle(ctx, px, py, NET_RADIUS, 10, t * 40, rgba(col, ready ? 0.75 : 0.35), 2.5);
+
+    // Anneau de portee autour d'Hyro : la limite est toujours lisible
     ctx.beginPath();
-    ctx.arc(px, py, 3, 0, TAU);
-    ctx.fillStyle = rgba(col, 0.9);
-    ctx.fill();
-    // Ligne de portee
-    ctx.beginPath();
-    ctx.moveTo(this.x, this.y - 12);
-    ctx.lineTo(px, py);
-    ctx.strokeStyle = rgba(col, 0.14);
+    ctx.arc(this.x, this.y, NET_RANGE, 0, TAU);
+    ctx.strokeStyle = rgba(ready ? '#ffffff' : '#8a8a9a', 0.12);
     ctx.lineWidth = 2;
     ctx.stroke();
+
+    // Point d'impact effectif si le curseur est trop loin
+    if (!inRange) {
+      dashedCircle(ctx, cx, cy, NET_RADIUS, 8, -t * 30, 'rgba(255,255,255,0.28)', 2);
+    }
+
+    // Reticule : exactement sous le curseur
+    ctx.globalAlpha = 0.9;
+    dashedCircle(ctx, aimX, aimY, NET_RADIUS, 10, t * 40, rgba(col, ready ? 0.8 : 0.35), 2.5);
+    ctx.beginPath();
+    ctx.moveTo(aimX - 8, aimY);
+    ctx.lineTo(aimX + 8, aimY);
+    ctx.moveTo(aimX, aimY - 8);
+    ctx.lineTo(aimX, aimY + 8);
+    ctx.strokeStyle = rgba(col, 0.95);
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
     if (this.netFlash > 0) {
       ctx.globalAlpha = this.netFlash * 0.6;
       ctx.beginPath();

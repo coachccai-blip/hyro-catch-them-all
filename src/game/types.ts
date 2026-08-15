@@ -56,6 +56,12 @@ export interface IPlayer {
   skating: boolean;
   hp: number;
   noisy: number;
+  /** Hyro se tient sur une structure surelevee. */
+  onLedge: boolean;
+  /** En plein saut ou en vol plane. */
+  airborne: boolean;
+  /** Perche ou en l'air : peut atteindre les souris en hauteur. */
+  elevated: boolean;
 }
 
 export interface IMouse {

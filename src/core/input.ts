@@ -8,7 +8,7 @@ import { clamp, TAU, type Vec2 } from './math';
 
 export type ActionId =
   | 'up' | 'down' | 'left' | 'right'
-  | 'net' | 'sword' | 'interact'
+  | 'net' | 'sword' | 'interact' | 'jump'
   | 'gadgetNext' | 'gadgetPrev' | 'gadgetUse'
   | 'pause' | 'confirm' | 'cancel' | 'map';
 
@@ -20,6 +20,7 @@ export const ACTION_LABELS: Record<ActionId, { fr: string; en: string }> = {
   net: { fr: 'Filet', en: 'Net' },
   sword: { fr: 'Épée', en: 'Sword' },
   interact: { fr: 'Interagir', en: 'Interact' },
+  jump: { fr: 'Saut', en: 'Jump' },
   gadgetNext: { fr: 'Gadget suivant', en: 'Next gadget' },
   gadgetPrev: { fr: 'Gadget précédent', en: 'Prev gadget' },
   gadgetUse: { fr: 'Utiliser gadget', en: 'Use gadget' },
@@ -32,7 +33,7 @@ export const ACTION_LABELS: Record<ActionId, { fr: string; en: string }> = {
 /** Actions remappables proposees dans l'ecran d'options. */
 export const REMAPPABLE: ActionId[] = [
   'up', 'down', 'left', 'right',
-  'net', 'sword', 'gadgetUse', 'interact',
+  'net', 'sword', 'jump', 'gadgetUse', 'interact',
   'gadgetNext', 'gadgetPrev', 'pause',
 ];
 
@@ -51,7 +52,8 @@ export function defaultKeyBindings(): KeyBindings {
     left: ['KeyA', 'KeyQ', 'ArrowLeft'],
     right: ['KeyD', 'ArrowRight'],
     net: ['Mouse0'],
-    sword: ['Space', 'Mouse2'],
+    sword: ['Mouse2', 'KeyR'],
+    jump: ['Space'],
     interact: ['KeyE'],
     gadgetUse: ['ShiftLeft', 'KeyF'],
     gadgetNext: ['KeyX', 'WheelDown'],
@@ -71,8 +73,9 @@ export function defaultPadBindings(): PadBindings {
     left: [14],
     right: [15],
     net: [7], // RT / R2
-    sword: [5, 2], // RB / R1, X(carre)
-    interact: [0], // A / croix
+    sword: [5, 3], // RB / R1, Y(triangle)
+    jump: [0], // A / croix
+    interact: [2], // X / carre
     gadgetUse: [6], // LT / L2
     gadgetNext: [4], // LB / L1
     gadgetPrev: [10], // clic stick gauche
@@ -109,7 +112,7 @@ export interface TapEvent {
 }
 
 const ALL_ACTIONS: ActionId[] = [
-  'up', 'down', 'left', 'right', 'net', 'sword', 'interact',
+  'up', 'down', 'left', 'right', 'net', 'sword', 'jump', 'interact',
   'gadgetNext', 'gadgetPrev', 'gadgetUse', 'pause', 'confirm', 'cancel', 'map',
 ];
 

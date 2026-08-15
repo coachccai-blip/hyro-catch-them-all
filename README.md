@@ -33,9 +33,10 @@ Astuce : `?level=3-2` dans l'URL lance directement un niveau
 | Action | Touche |
 |---|---|
 | Déplacement | `ZQSD` / `WASD` / flèches (les deux jeux répondent, pas de config AZERTY à faire) |
-| Viser | souris — le cercle est la zone d'effet du filet |
-| Filet | clic gauche |
-| Épée | `Espace` ou clic droit |
+| Viser | souris — le réticule colle exactement au curseur |
+| Filet | clic gauche (portée : **un chat**, l'anneau autour d'Hyro la montre) |
+| Saut | `Espace` |
+| Épée | clic droit ou `R` |
 | Gadget | `Maj` ou `F` |
 | Changer de gadget | `X` / `C`, molette, ou `1`–`8` |
 | Interagir / terminer le niveau | `E` |
@@ -43,13 +44,15 @@ Astuce : `?level=3-2` dans l'URL lance directement un niveau
 | Debug (hitboxes, cônes de vision) | `F1` |
 
 ### Manette (Gamepad API)
-Stick gauche : déplacement · Stick droit : visée · `RT` : filet · `RB`/`X` : épée ·
-`LT` : gadget · `LB` : gadget suivant · `A` : interagir · `Start` : pause.
+Stick gauche : déplacement · Stick droit : visée · `RT` : filet · `A` : saut ·
+`RB`/`Y` : épée · `LT` : gadget · `LB` : gadget suivant · `X` : interagir ·
+`Start` : pause.
 Vibration légère sur capture et sur coup reçu si la manette la supporte.
 
 ### Tactile
 Joystick virtuel flottant à gauche, glissement à droite pour viser (relâcher
-lance le filet), plus des boutons larges : filet, épée, gadget, cycle, `E`, pause.
+lance le filet), plus des boutons larges : filet, épée, saut, gadget, cycle,
+`E`, pause.
 
 Toutes les touches clavier et manette sont **reconfigurables** dans les options.
 
@@ -57,6 +60,12 @@ Toutes les touches clavier et manette sont **reconfigurables** dans les options.
 
 ## Contenu
 
+- **Verticalité** : chaque monde comporte des structures surélevées (terrasses
+  de jardin, toits d'étals, passerelles d'égout, toitures, caillebotis d'usine).
+  Le saut permet d'y grimper et de franchir les petits trous ; **certaines
+  souris se planquent en hauteur** et sont intouchables depuis le sol — il faut
+  monter sur la structure, les attraper en plein saut, ou fondre dessus au
+  planeur.
 - **7 types de souris**, identifiables par la couleur du bandana **et** par un
   symbole distinct (daltonisme) : Trouillarde ▲, Flâneuse ●, Bagarreuse ✚,
   Sprinteuse ◆, Ingénieuse ★, Ombre ☾, Blanche ✦ (1 par niveau, très cachée).

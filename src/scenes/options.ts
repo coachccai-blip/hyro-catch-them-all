@@ -6,6 +6,7 @@
 import { Scene } from '../core/scene';
 import { Menu, screenTitle, drawIconButton, hitCircle, type MenuItem } from '../ui/widgets';
 import { ACTION_LABELS, Input, REMAPPABLE, defaultKeyBindings, defaultPadBindings, type ActionId } from '../core/input';
+import { clamp } from '../core/math';
 import { outlinedText, panel, roundRect, type Ctx } from '../render/draw';
 import { audio } from '../audio/audio';
 import { getLang, setLang, t } from '../ui/i18n';
@@ -228,11 +229,38 @@ export class OptionsScene extends Scene {
     const title = this.mode === 'main' ? t('options') : this.mode === 'pad' ? t('remapPad') : t('remapKeys');
     screenTitle(ctx, title, v.w / 2, 84);
 
-    const rowH = this.mode === 'main' ? 58 : 52;
-    const h = this.menu.height(rowH, 8);
-    const maxTop = 140;
-    const startY = Math.max(maxTop, v.h / 2 - h / 2);
-    this.menu.draw(ctx, v.w / 2, Math.min(startY, maxTop + 20), Math.min(720, v.w - 80), rowH, 8);
+    const rowH = this.mode === 'main' ? 56 : 50;
+    const gap = 8;
+    const h = this.menu.height(rowH, gap);
+    const top = 138;
+    const avail = v.h - top - 26;
+    // Liste plus haute que l'ecran (remapping) : on defile pour garder la
+    // ligne selectionnee visible.
+    let startY = h <= avail ? Math.max(top, v.h / 2 - h / 2) : top;
+    if (h > avail) {
+      const selY = this.menu.index * (rowH + gap);
+      startY = top - clamp(selY - avail * 0.45, 0, h - avail);
+    }
+    if (h > avail) {
+      // Zone de defilement decoupee : les lignes hors cadre ne debordent pas
+      // sur le titre.
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, top - 6, v.w, avail + 12);
+      ctx.clip();
+      this.menu.draw(ctx, v.w / 2, startY, Math.min(720, v.w - 80), rowH, gap);
+      ctx.restore();
+    } else {
+      this.menu.draw(ctx, v.w / 2, startY, Math.min(720, v.w - 80), rowH, gap);
+    }
+    if (h > avail) {
+      // Indicateur de defilement
+      const frac = clamp((top - startY) / (h - avail), 0, 1);
+      const trackH = avail - 40;
+      roundRect(ctx, v.w / 2 + Math.min(720, v.w - 80) / 2 + 16, top + 20 + frac * (trackH - 60), 6, 60, 3);
+      ctx.fillStyle = 'rgba(255,209,102,0.65)';
+      ctx.fill();
+    }
 
     if (this.capturing) {
       panel(ctx, v.w / 2 - 300, v.h / 2 - 70, 600, 140, { fill: '#22304e', stroke: '#ffd166', radius: 18 });

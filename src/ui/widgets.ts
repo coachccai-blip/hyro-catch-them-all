@@ -71,13 +71,20 @@ export class Menu {
       this.anim[i] = damp(this.anim[i], i === this.index ? 1 : 0, 14, dt);
     }
 
-    // Navigation directionnelle (avec auto-repeat)
-    const dy = (input.isDown('down') ? 1 : 0) - (input.isDown('up') ? 1 : 0);
-    if (dy !== 0) {
+    // Navigation directionnelle : une impulsion deplace toujours la selection
+    // (meme sur un appui tres bref), puis l'auto-repeat prend le relais si la
+    // touche reste enfoncee.
+    const tap = (input.pressed('down') ? 1 : 0) - (input.pressed('up') ? 1 : 0);
+    const held = (input.isDown('down') ? 1 : 0) - (input.isDown('up') ? 1 : 0);
+    if (tap !== 0) {
+      this.repeat = 0.36;
+      this.moveSel(tap);
+      audio.sfx('ui');
+    } else if (held !== 0) {
       this.repeat -= dt;
-      if (input.pressed('down') || input.pressed('up') || this.repeat <= 0) {
-        this.repeat = input.pressed('down') || input.pressed('up') ? 0.36 : 0.11;
-        this.moveSel(dy);
+      if (this.repeat <= 0) {
+        this.repeat = 0.11;
+        this.moveSel(held);
         audio.sfx('ui');
       }
     } else {
@@ -178,7 +185,7 @@ export class Menu {
 
       if (it.kind === 'slider') {
         const bx = px + pw * 0.48;
-        const bw = pw * 0.44;
+        const bw = pw * 0.36;
         const by = y + h / 2;
         roundRect(ctx, bx, by - 7, bw, 14, 7);
         ctx.fillStyle = 'rgba(0,0,0,0.45)';

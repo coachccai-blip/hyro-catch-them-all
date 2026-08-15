@@ -94,13 +94,19 @@ export class PlayScene extends Scene {
     const p = this.world.player;
     const cam = this.world.camera;
     if (input.aimMode === 'cursor') {
-      this.aim = { x: cam.x + input.cursor.x, y: cam.y + input.cursor.y };
+      // Ecran -> monde : la camera est dessinee avec un zoom, il faut le
+      // diviser ici sinon le reticule derive par rapport au curseur.
+      this.aim = {
+        x: cam.x + input.cursor.x / cam.zoom,
+        y: cam.y + input.cursor.y / cam.zoom,
+      };
     } else {
-      const reach = 175;
+      const reach = 110;
       this.aim = { x: p.x + input.aimDir.x * reach, y: p.y + input.aimDir.y * reach };
     }
-    // Aide a la visee : accroche la souris capturable la plus proche
-    if (this.game.save.settings.aimAssist) {
+    // Aide a la visee : uniquement au stick / au tactile. A la souris, le
+    // reticule doit coller EXACTEMENT au curseur, sans magnetisme.
+    if (this.game.save.settings.aimAssist && input.aimMode !== 'cursor') {
       let best: { x: number; y: number; d: number } | null = null;
       for (const m of this.world.mice) {
         if (m.captured || !m.visible) continue;
@@ -121,6 +127,7 @@ export class PlayScene extends Scene {
       aimY: this.aim.y,
       net: input.pressed('net') || input.aimReleased,
       sword: input.pressed('sword'),
+      jump: input.pressed('jump'),
       gadget: input.pressed('gadgetUse'),
       gadgetHeld: input.isDown('gadgetUse'),
       cycle: (input.pressed('gadgetNext') ? 1 : 0) - (input.pressed('gadgetPrev') ? 1 : 0) + Math.sign(input.wheel),
@@ -151,7 +158,7 @@ export class PlayScene extends Scene {
   private idleCmd(): PlayerCmd {
     return {
       moveX: 0, moveY: 0, aimX: this.world.player.x + 100, aimY: this.world.player.y,
-      net: false, sword: false, gadget: false, gadgetHeld: false, cycle: 0, slot: null,
+      net: false, sword: false, jump: false, gadget: false, gadgetHeld: false, cycle: 0, slot: null,
     };
   }
 

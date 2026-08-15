@@ -34,6 +34,13 @@ export const TUTORIALS: Record<string, TutorialCard> = {
     bodyEn: 'Catch the quota shown top-right, then return to the starting basket to finish.',
     icon: { kind: 'mouse', id: 'yellow' },
   },
+  jump: {
+    title: 'Saut',
+    titleEn: 'Jump',
+    body: 'Espace (ou A à la manette) pour sauter : franchis les petits trous et grimpe sur les structures. Certaines souris se planquent en hauteur — impossible de les attraper depuis le sol.',
+    bodyEn: 'Space (or A on a gamepad) to jump: clear small holes and climb onto structures. Some mice hide up high — you cannot net them from the ground.',
+    icon: { kind: 'mouse', id: 'yellow' },
+  },
   sword: {
     title: 'L\'épée',
     titleEn: 'The sword',

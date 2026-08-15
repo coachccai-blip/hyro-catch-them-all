@@ -86,6 +86,8 @@ export interface MouseSpawn {
   locked: boolean;
   /** Position de cachette associee (buisson, trou). */
   hideAt?: Vec2;
+  /** La souris vit sur une structure surelevee (accessible en sautant). */
+  perched?: boolean;
 }
 
 export interface MobSpawn {
@@ -252,6 +254,7 @@ export function generateLevel(def: LevelDef): GeneratedLevel {
 
   // --- Features de theme ----------------------------------------------------
   applyThemeFeatures(grid, cols, rows, rooms, rng, def);
+  ensureLedges(grid, cols, rows, rooms, rng);
 
   // --- Salle de depart ------------------------------------------------------
   rooms[0].isSpawn = true;
@@ -477,6 +480,35 @@ function buildArena(grid: Uint8Array, cols: number, rows: number, rooms: RoomRec
   rooms.push({ x: Math.floor(ccx - 4), y: Math.floor(ccy - 4), w: 8, h: 8, cx: Math.floor(ccx), cy: Math.floor(ccy) });
 }
 
+/**
+ * Garantit un minimum de structures surelevees : le saut doit toujours avoir
+ * quelque chose a escalader, dans tous les mondes.
+ */
+function ensureLedges(
+  grid: Uint8Array, cols: number, rows: number, rooms: RoomRect[], rng: Rng,
+) {
+  const idx = (cx: number, cy: number) => cy * cols + cx;
+  let count = 0;
+  for (const t of grid) if (t === TERR.LEDGE) count++;
+  const target = Math.floor(cols * rows * 0.03);
+  let guard = 0;
+  while (count < target && guard++ < 120) {
+    const r = rng.pick(rooms);
+    const cx = r.cx + rng.int(-4, 4);
+    const cy = r.cy + rng.int(-3, 3);
+    const rad = rng.range(1.8, 2.6);
+    for (let y = Math.floor(cy - rad); y <= cy + rad; y++) {
+      for (let x = Math.floor(cx - rad); x <= cx + rad; x++) {
+        if (x < 2 || y < 2 || x >= cols - 2 || y >= rows - 2) continue;
+        if (Math.hypot(x - cx, y - cy) / rad > 0.8) continue;
+        if (!isWalkable(grid[idx(x, y)])) continue;
+        grid[idx(x, y)] = TERR.LEDGE;
+        count++;
+      }
+    }
+  }
+}
+
 /** Ajoute eau, gouffres, herbes hautes, passerelles, fondue selon le theme. */
 function applyThemeFeatures(
   grid: Uint8Array, cols: number, rows: number, rooms: RoomRect[], rng: Rng, def: LevelDef,
@@ -510,6 +542,11 @@ function applyThemeFeatures(
       for (let i = 0; i < def.index; i++) {
         const r = rng.pick(rooms.slice(1));
         stampBlob(r.cx + rng.int(-3, 3), r.cy + rng.int(-2, 2), rng.range(1.2, 2), TERR.GAP);
+      }
+      // Murets, table de jardin, gros rochers plats : de la verticalite
+      for (let i = 0; i < 3 + def.index; i++) {
+        const r = rng.pick(rooms);
+        stampBlob(r.cx + rng.int(-4, 4), r.cy + rng.int(-3, 3), rng.range(1.3, 2.4), TERR.LEDGE);
       }
       break;
     }
@@ -737,9 +774,12 @@ function floodFill(
       const nx = n % cols;
       if (Math.abs(nx - cx) > 1) continue;
       const t = grid[n];
+      // Les plateformes sont accessibles au saut, disponible des le niveau 1 :
+      // elles comptent donc comme atteignables meme en flood strict.
       const passable = isWalkable(t)
+        || t === TERR.LEDGE
         || barrierCells.has(n)
-        || (crossGadgetTerrain && (t === TERR.WATER || t === TERR.GAP || t === TERR.LEDGE));
+        || (crossGadgetTerrain && (t === TERR.WATER || t === TERR.GAP));
       if (!passable) continue;
       seen[n] = 1;
       stack.push(n);
@@ -951,6 +991,37 @@ function randomWalkable(
   return null;
 }
 
+/**
+ * Emplacement sur une structure surelevee, atteignable au saut : la cellule
+ * LEDGE doit toucher (a 2 cases) une cellule praticable elle-meme atteignable.
+ */
+function randomPerch(
+  grid: Uint8Array, cols: number, rows: number, rng: Rng, reach: Uint8Array,
+): Vec2 | null {
+  const idx = (cx: number, cy: number) => cy * cols + cx;
+  const spots: number[] = [];
+  for (let cy = 2; cy < rows - 2; cy++) {
+    for (let cx = 2; cx < cols - 2; cx++) {
+      const i = idx(cx, cy);
+      if (grid[i] !== TERR.LEDGE || !reach[i]) continue;
+      let jumpable = false;
+      for (let d = 1; d <= 2 && !jumpable; d++) {
+        for (const [dx, dy] of [[d, 0], [-d, 0], [0, d], [0, -d]] as const) {
+          const n = idx(clamp(cx + dx, 0, cols - 1), clamp(cy + dy, 0, rows - 1));
+          if (reach[n] && isWalkable(grid[n])) {
+            jumpable = true;
+            break;
+          }
+        }
+      }
+      if (jumpable) spots.push(i);
+    }
+  }
+  if (!spots.length) return null;
+  const pick = spots[rng.int(0, spots.length - 1)];
+  return { x: ((pick % cols) + 0.5) * CELL, y: (Math.floor(pick / cols) + 0.5) * CELL };
+}
+
 function placeMice(
   grid: Uint8Array, cols: number, rows: number, rooms: RoomRect[], lockedRooms: RoomRect[],
   rng: Rng, def: LevelDef, hideSpots: Vec2[], reach: Uint8Array, fallback: Vec2,
@@ -964,7 +1035,16 @@ function placeMice(
   const pool = freeRooms.length ? freeRooms : (anyRoom.length ? anyRoom : rooms);
   let n = 0;
 
-  const push = (kind: MouseKind, room: RoomRect) => {
+  const perchChance = 0.18;
+  const push = (kind: MouseKind, room: RoomRect, forcePerch = false) => {
+    // Certaines souris se planquent en hauteur : il faudra sauter pour elles.
+    if ((forcePerch || rng.bool(perchChance)) && !room.locked) {
+      const perch = randomPerch(grid, cols, rows, rng, reach);
+      if (perch) {
+        out.push({ id: `${def.id}#${n++}`, kind, x: perch.x, y: perch.y, locked: false, perched: true });
+        return;
+      }
+    }
     let p = randomWalkable(grid, cols, rows, room, rng, reach);
     let locked = !!room.locked;
     if (!p) {
@@ -984,14 +1064,17 @@ function placeMice(
 
   // La souris Blanche va dans une zone verrouillee si possible
   const entries = Object.entries(def.mice) as [MouseKind, number][];
+  let first = true;
   for (const [kind, count] of entries) {
     for (let i = 0; i < (count ?? 0); i++) {
       if (kind === 'white') {
         push('white', usableLocked.length ? usableLocked[0] : rng.pick(pool));
       } else {
-        // Une partie des souris peuple les zones verrouillees (bonus 100 %)
-        const useLocked = usableLocked.length > 0 && rng.bool(0.14);
-        push(kind, useLocked ? rng.pick(usableLocked) : rng.pick(pool));
+        // La toute premiere souris ordinaire est perchee : le joueur decouvre
+        // toujours la verticalite, meme dans le premier niveau.
+        const useLocked = !first && usableLocked.length > 0 && rng.bool(0.14);
+        push(kind, useLocked ? rng.pick(usableLocked) : rng.pick(pool), first);
+        first = false;
       }
     }
   }

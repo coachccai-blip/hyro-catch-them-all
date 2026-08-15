@@ -62,9 +62,10 @@ export class Hud {
     this.touch = [
       { id: 'net', action: 'net', x: w - 150 * k, y: h - 150 * k, r: 76 * k, label: 'net' },
       { id: 'sword', action: 'sword', x: w - 300 * k, y: h - 122 * k, r: 56 * k, label: 'sword' },
-      { id: 'gadget', action: 'gadgetUse', x: w - 152 * k, y: h - 312 * k, r: 58 * k, label: 'gadget' },
-      { id: 'cycle', action: 'gadgetNext', x: w - 288 * k, y: h - 272 * k, r: 42 * k, label: 'cycle' },
-      { id: 'interact', action: 'interact', x: w - 358 * k, y: h - 236 * k, r: 40 * k, label: 'E' },
+      { id: 'jump', action: 'jump', x: w - 262 * k, y: h - 262 * k, r: 52 * k, label: 'jump' },
+      { id: 'gadget', action: 'gadgetUse', x: w - 148 * k, y: h - 322 * k, r: 58 * k, label: 'gadget' },
+      { id: 'cycle', action: 'gadgetNext', x: w - 106 * k, y: h - 452 * k, r: 40 * k, label: 'cycle' },
+      { id: 'interact', action: 'interact', x: w - 382 * k, y: h - 218 * k, r: 40 * k, label: 'E' },
       { id: 'pause', action: 'pause', x: 58, y: 138, r: 34, label: 'pause' },
     ];
     return this.touch;
@@ -93,6 +94,7 @@ export class Hud {
           break;
         }
         case 'cycle': outlinedText(ctx, '⟳', b.x, b.y, s * 0.8, '#fff6e2'); break;
+        case 'jump': outlinedText(ctx, '⤒', b.x, b.y, s * 0.85, '#fff6e2'); break;
         case 'pause': outlinedText(ctx, '❚❚', b.x, b.y, s * 0.5, '#fff6e2'); break;
         default: outlinedText(ctx, b.label ?? '', b.x, b.y, s * 0.55, '#fff6e2'); break;
       }

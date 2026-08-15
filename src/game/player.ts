@@ -1,0 +1,618 @@
+/**
+ * Hyro : deplacement, filet, epee, degats et les 8 gadgets.
+ * Toutes les constantes de feeling sont regroupees en haut du fichier.
+ */
+
+import { TAU, clamp, clamp01, damp, dist, wrapAngle, type Vec2 } from '../core/math';
+import { CELL, TERR, type GadgetId } from '../levels/types';
+import { drawHyro, type HyroView } from '../render/characters';
+import { dashedCircle, rgba, type Ctx } from '../render/draw';
+import type { MoveCaps } from './physics';
+import type { IWorld } from './types';
+
+// --- Reglages de feeling -----------------------------------------------------
+const SPEED = 268;
+const SPEED_SKATE = 452;
+const ACCEL = 14;
+const ACCEL_SKATE = 6.5;
+const NET_RANGE = 210;
+const NET_RADIUS = 66;
+const NET_COOLDOWN = 0.5;
+const NET_STRIKE_AT = 0.42;
+const SWORD_COOLDOWN = 0.36;
+const SWORD_RANGE = 104;
+const SWORD_ARC = 0.72;
+const SWORD_STUN = 3.0;
+const INVULN_TIME = 1.25;
+const KNOCK_TIME = 0.3;
+const DASH_TIME = 0.2;
+const DASH_SPEED = 720;
+const GRAPPLE_RANGE = 440;
+const MAX_HP = 5;
+
+export interface PlayerCmd {
+  moveX: number;
+  moveY: number;
+  /** Point vise en coordonnees monde. */
+  aimX: number;
+  aimY: number;
+  net: boolean;
+  sword: boolean;
+  gadget: boolean;
+  gadgetHeld: boolean;
+  cycle: number;
+  slot: number | null;
+}
+
+export class Player {
+  x: number;
+  y: number;
+  r = 15;
+  dir = -Math.PI / 2;
+  hp = MAX_HP;
+  maxHp = MAX_HP;
+  invuln = 0;
+  blinkPhase = 0;
+  anim = 0;
+  move = 0;
+  noisy = 0;
+  dead = false;
+
+  state: HyroView['state'] = 'idle';
+  action = 0;
+
+  /** Gadgets debloques et selection courante. */
+  gadgets: GadgetId[] = [];
+  selected = 0;
+  cooldowns: Partial<Record<GadgetId, number>> = {};
+
+  radarOn = false;
+  skating = false;
+  gliding = false;
+  dashing = false;
+  onLedge = false;
+
+  private vx = 0;
+  private vy = 0;
+  private netTimer = 0;
+  private netFired = false;
+  netPoint: Vec2 = { x: 0, y: 0 };
+  netFlash = 0;
+  private swordTimer = 0;
+  private swordFired = false;
+  private dashTimer = 0;
+  private dashDir: Vec2 = { x: 1, y: 0 };
+  private knock = 0;
+  private kx = 0;
+  private ky = 0;
+  private lastSafe: Vec2;
+  private safeTimer = 0;
+  private hazardTimer = 0;
+  private stepTimer = 0;
+  private pulling = 0;
+  private pullTo: Vec2 = { x: 0, y: 0 };
+  private radarTimer = 0;
+  private winTimer = 0;
+  /** Trainee de dash / patins. */
+  trail: { x: number; y: number; life: number }[] = [];
+
+  constructor(x: number, y: number, gadgets: GadgetId[]) {
+    this.x = x;
+    this.y = y;
+    this.gadgets = gadgets.slice();
+    this.lastSafe = { x, y };
+  }
+
+  get caps(): MoveCaps {
+    return {
+      gap: this.dashing || this.gliding,
+      water: false,
+      ledge: this.onLedge,
+    };
+  }
+
+  get current(): GadgetId | null {
+    return this.gadgets[this.selected] ?? null;
+  }
+
+  cooldownOf(id: GadgetId): number {
+    return this.cooldowns[id] ?? 0;
+  }
+
+  addGadget(id: GadgetId) {
+    if (!this.gadgets.includes(id)) this.gadgets.push(id);
+  }
+
+  // -------------------------------------------------------------------------
+
+  update(dt: number, w: IWorld, cmd: PlayerCmd) {
+    this.anim += dt;
+    this.invuln = Math.max(0, this.invuln - dt);
+    this.blinkPhase = this.invuln > 0 ? (this.blinkPhase + dt * 18) % 2 : 0;
+    this.netFlash = Math.max(0, this.netFlash - dt * 3);
+    for (const k of Object.keys(this.cooldowns) as GadgetId[]) {
+      this.cooldowns[k] = Math.max(0, (this.cooldowns[k] ?? 0) - dt);
+    }
+
+    // --- Selection de gadget ------------------------------------------------
+    if (this.gadgets.length) {
+      if (cmd.cycle) {
+        this.selected = (this.selected + cmd.cycle + this.gadgets.length * 2) % this.gadgets.length;
+        w.sfx('ui');
+      }
+      if (cmd.slot !== null && cmd.slot >= 1 && cmd.slot <= this.gadgets.length) {
+        this.selected = cmd.slot - 1;
+        w.sfx('ui');
+      }
+    }
+
+    // --- Etats speciaux -----------------------------------------------------
+    if (this.pulling > 0) {
+      this.pulling -= dt;
+      this.x = damp(this.x, this.pullTo.x, 16, dt);
+      this.y = damp(this.y, this.pullTo.y, 16, dt);
+      this.move = 1;
+      if (this.pulling <= 0) {
+        this.x = this.pullTo.x;
+        this.y = this.pullTo.y;
+        this.onLedge = w.nav.terrainAt(this.x, this.y) === TERR.LEDGE;
+        w.fx.dust(this.x, this.y, '#ffffff', 6);
+      }
+      this.updateTrail(dt);
+      return;
+    }
+
+    if (this.knock > 0) {
+      this.knock -= dt;
+      w.nav.moveAndSlide(this, this.kx * dt, this.ky * dt, this.caps);
+      this.kx *= 0.88;
+      this.ky *= 0.88;
+      this.state = 'hurt';
+      this.updateTrail(dt);
+      return;
+    }
+
+    // --- Gadgets ------------------------------------------------------------
+    this.gliding = false;
+    const g = this.current;
+    if (g === 'glider' && cmd.gadgetHeld && this.cooldownOf('glider') <= 0) {
+      this.gliding = true;
+    }
+    if (cmd.gadget && g) this.useGadget(g, w, cmd);
+
+    // --- Dash ---------------------------------------------------------------
+    if (this.dashTimer > 0) {
+      this.dashTimer -= dt;
+      this.dashing = this.dashTimer > 0;
+      const sp = DASH_SPEED * (0.4 + clamp01(this.dashTimer / DASH_TIME) * 0.9);
+      w.nav.moveAndSlide(this, this.dashDir.x * sp * dt, this.dashDir.y * sp * dt, this.caps);
+      this.move = 1;
+      this.state = 'dash';
+      this.trail.push({ x: this.x, y: this.y, life: 0.3 });
+      this.updateTrail(dt);
+      if (!this.dashing) this.checkFall(w);
+      return;
+    }
+    this.dashing = false;
+
+    // --- Deplacement --------------------------------------------------------
+    const speed = (this.skating ? SPEED_SKATE : SPEED) * (this.gliding ? 0.86 : 1);
+    const accel = this.skating ? ACCEL_SKATE : ACCEL;
+    const tx = cmd.moveX * speed;
+    const ty = cmd.moveY * speed;
+    this.vx = damp(this.vx, tx, accel, dt);
+    this.vy = damp(this.vy, ty, accel, dt);
+    const sp = Math.hypot(this.vx, this.vy);
+    this.move = clamp01(sp / SPEED);
+    if (sp > 12) {
+      // On oriente Hyro vers la visee si elle est active, sinon vers la marche
+      const aimAng = Math.atan2(cmd.aimY - this.y, cmd.aimX - this.x);
+      const moveAng = Math.atan2(this.vy, this.vx);
+      const target = this.state === 'net' || this.state === 'sword' ? aimAng : moveAng;
+      this.dir = this.dir + wrapAngle(target - this.dir) * Math.min(1, dt * 16);
+    } else if (this.state === 'net' || this.state === 'sword') {
+      const aimAng = Math.atan2(cmd.aimY - this.y, cmd.aimX - this.x);
+      this.dir = this.dir + wrapAngle(aimAng - this.dir) * Math.min(1, dt * 20);
+    }
+
+    const terrain = w.nav.terrainAt(this.x, this.y);
+    let drift = 1;
+    if (terrain === TERR.SLICK) drift = 0.55; // on glisse : moins de controle
+    w.nav.moveAndSlide(this, this.vx * dt * drift, this.vy * dt * drift, this.caps);
+    if (terrain === TERR.SLICK) {
+      // Inertie residuelle sur sol glissant
+      w.nav.moveAndSlide(this, this.vx * dt * 0.45, this.vy * dt * 0.45, this.caps);
+    }
+
+    // Sortie de plateforme : on redevient "au sol"
+    if (this.onLedge && w.nav.terrainAt(this.x, this.y) !== TERR.LEDGE) this.onLedge = false;
+
+    // --- Sol dangereux ------------------------------------------------------
+    if (terrain === TERR.HAZARD && !this.skating && !this.gliding) {
+      this.hazardTimer -= dt;
+      if (this.hazardTimer <= 0) {
+        this.hazardTimer = 0.75;
+        this.hurt(1, this.x, this.y + 30, w);
+        w.fx.burstHit(this.x, this.y, '#ff9b3a');
+      }
+    } else {
+      this.hazardTimer = 0.25;
+    }
+
+    // Memorisation d'une position sure (pour les chutes)
+    this.safeTimer -= dt;
+    if (this.safeTimer <= 0) {
+      this.safeTimer = 0.25;
+      const t = w.nav.terrainAt(this.x, this.y);
+      if (t === TERR.GROUND || t === TERR.PATH || t === TERR.GRASS) {
+        this.lastSafe = { x: this.x, y: this.y };
+      }
+    }
+    this.checkFall(w);
+
+    // --- Bruit de pas -------------------------------------------------------
+    this.noisy = this.skating ? 1 : this.move * 0.35;
+    if (this.move > 0.35) {
+      this.stepTimer -= dt * (this.skating ? 2.2 : 1);
+      if (this.stepTimer <= 0) {
+        this.stepTimer = 0.32;
+        w.sfx('step', terrain === TERR.WATER ? 2 : terrain === TERR.PATH ? 1 : 0);
+        w.fx.dust(this.x, this.y + 4, 'rgba(255,255,255,0.5)', 2);
+      }
+    }
+    if (this.skating && this.move > 0.4) this.trail.push({ x: this.x, y: this.y, life: 0.22 });
+
+    // --- Attaques -----------------------------------------------------------
+    this.updateNet(dt, w, cmd);
+    this.updateSword(dt, w, cmd);
+
+    // --- Radar --------------------------------------------------------------
+    if (this.radarOn) {
+      this.radarTimer -= dt;
+      if (this.radarTimer <= 0) {
+        this.radarTimer = 1.6;
+        w.sfx('radar');
+        w.radarPing = 1;
+        for (const m of w.mice) {
+          if (dist(m.x, m.y, this.x, this.y) < 900) (m as unknown as { revealed: number }).revealed = 2.2;
+        }
+      }
+    }
+
+    // --- Etat d'animation ---------------------------------------------------
+    if (this.winTimer > 0) {
+      this.winTimer -= dt;
+      this.state = 'win';
+    } else if (this.netTimer > 0) this.state = 'net';
+    else if (this.swordTimer > 0) this.state = 'sword';
+    else if (this.gliding) this.state = 'glide';
+    else if (this.move > 0.12) this.state = 'run';
+    else this.state = 'idle';
+
+    this.updateTrail(dt);
+  }
+
+  private updateTrail(dt: number) {
+    for (let i = this.trail.length - 1; i >= 0; i--) {
+      this.trail[i].life -= dt;
+      if (this.trail[i].life <= 0) this.trail.splice(i, 1);
+    }
+    if (this.trail.length > 40) this.trail.splice(0, this.trail.length - 40);
+  }
+
+  /** Chute dans un gouffre / le vide : perte d'un coeur et retour au bord. */
+  private checkFall(w: IWorld) {
+    if (this.dashing || this.gliding) return;
+    const t = w.nav.terrainAt(this.x, this.y);
+    if (t === TERR.GAP || t === TERR.VOID) {
+      this.hurt(1, this.x, this.y, w, true);
+      this.x = this.lastSafe.x;
+      this.y = this.lastSafe.y;
+      this.vx = 0;
+      this.vy = 0;
+      this.knock = 0;
+      w.fx.dust(this.x, this.y, '#ffffff', 10);
+      w.shake(6);
+    }
+  }
+
+  // --- Filet ----------------------------------------------------------------
+
+  private updateNet(dt: number, w: IWorld, cmd: PlayerCmd) {
+    if (this.netTimer > 0) {
+      this.netTimer -= dt;
+      this.action = 1 - clamp01(this.netTimer / NET_COOLDOWN);
+      if (!this.netFired && this.action >= NET_STRIKE_AT) {
+        this.netFired = true;
+        this.strikeNet(w);
+      }
+      return;
+    }
+    if (cmd.net && !this.gliding) {
+      const aimAng = Math.atan2(cmd.aimY - this.y, cmd.aimX - this.x);
+      const d = Math.min(NET_RANGE, dist(this.x, this.y, cmd.aimX, cmd.aimY));
+      this.netPoint = { x: this.x + Math.cos(aimAng) * d, y: this.y + Math.sin(aimAng) * d };
+      this.dir = aimAng;
+      this.netTimer = NET_COOLDOWN;
+      this.netFired = false;
+      this.action = 0;
+      w.sfx('net');
+    }
+  }
+
+  private strikeNet(w: IWorld) {
+    const px = this.netPoint.x;
+    const py = this.netPoint.y;
+    this.netFlash = 1;
+    w.fx.spawn('ring', px, py, 0, 0, 0.3, NET_RADIUS * 0.5, '#ffffff');
+    let caught = 0;
+    let refused: string | null = null;
+    for (const m of w.mice) {
+      if (m.captured) continue;
+      if (dist(m.x, m.y, px, py) > NET_RADIUS + m.r) continue;
+      const mm = m as unknown as { canBeCaught: (w: IWorld) => boolean; whyNot: (w: IWorld) => string };
+      if (mm.canBeCaught(w)) {
+        m.capture();
+        w.onMouseCaptured(m);
+        caught++;
+      } else {
+        refused = mm.whyNot(w);
+      }
+    }
+    if (caught === 0) {
+      if (refused) w.fx.floatingText(px, py - 20, refused, '#ff9b9b');
+      w.fx.dust(px, py, 'rgba(255,255,255,0.6)', 4);
+    } else {
+      this.winTimer = 0.5;
+      w.shake(4);
+    }
+  }
+
+  // --- Epee -----------------------------------------------------------------
+
+  private updateSword(dt: number, w: IWorld, cmd: PlayerCmd) {
+    if (this.swordTimer > 0) {
+      this.swordTimer -= dt;
+      this.action = 1 - clamp01(this.swordTimer / SWORD_COOLDOWN);
+      if (!this.swordFired && this.action >= 0.35) {
+        this.swordFired = true;
+        this.strikeSword(w);
+      }
+      return;
+    }
+    if (cmd.sword && !this.gliding && this.netTimer <= 0) {
+      this.dir = Math.atan2(cmd.aimY - this.y, cmd.aimX - this.x);
+      this.swordTimer = SWORD_COOLDOWN;
+      this.swordFired = false;
+      w.sfx('sword');
+    }
+  }
+
+  private strikeSword(w: IWorld) {
+    const hitAngle = this.dir;
+    let hit = false;
+    for (const m of w.mice) {
+      if (m.captured) continue;
+      const d = dist(m.x, m.y, this.x, this.y);
+      if (d > SWORD_RANGE + m.r) continue;
+      if (Math.abs(wrapAngle(Math.atan2(m.y - this.y, m.x - this.x) - hitAngle)) > SWORD_ARC) continue;
+      m.applyStun(SWORD_STUN);
+      (m as unknown as { flush: (w: IWorld) => void }).flush(w);
+      w.fx.burstHit(m.x, m.y - 10, '#ffe066');
+      w.sfx('stun');
+      hit = true;
+    }
+    for (const mob of w.mobs) {
+      if (mob.dead) continue;
+      const d = dist(mob.x, mob.y, this.x, this.y);
+      if (d > SWORD_RANGE + mob.r) continue;
+      if (Math.abs(wrapAngle(Math.atan2(mob.y - this.y, mob.x - this.x) - hitAngle)) > SWORD_ARC) continue;
+      mob.hit(1, this.x, this.y);
+      w.fx.burstHit(mob.x, mob.y - 12, '#ff9b5e');
+      w.sfx('hitmob');
+      hit = true;
+    }
+    // Debusquage des cachettes
+    const bx = this.x + Math.cos(hitAngle) * SWORD_RANGE * 0.6;
+    const by = this.y + Math.sin(hitAngle) * SWORD_RANGE * 0.6;
+    w.fx.spawn('poof', bx, by, 0, 0, 0.22, 26, 'rgba(255,255,255,0.45)');
+    if (hit) w.shake(3);
+  }
+
+  // --- Gadgets --------------------------------------------------------------
+
+  private useGadget(id: GadgetId, w: IWorld, cmd: PlayerCmd) {
+    if (this.cooldownOf(id) > 0) return;
+    const aimAng = Math.atan2(cmd.aimY - this.y, cmd.aimX - this.x);
+    switch (id) {
+      case 'radar': {
+        this.radarOn = !this.radarOn;
+        this.cooldowns.radar = 0.4;
+        w.sfx('radar');
+        w.fx.floatingText(this.x, this.y - 60, this.radarOn ? 'Radar ON' : 'Radar OFF', '#5ce1e6');
+        break;
+      }
+      case 'dash': {
+        this.dashTimer = DASH_TIME;
+        this.dashDir = { x: Math.cos(this.dir), y: Math.sin(this.dir) };
+        if (cmd.moveX || cmd.moveY) {
+          const l = Math.hypot(cmd.moveX, cmd.moveY);
+          this.dashDir = { x: cmd.moveX / l, y: cmd.moveY / l };
+          this.dir = Math.atan2(this.dashDir.y, this.dashDir.x);
+        }
+        this.invuln = Math.max(this.invuln, DASH_TIME + 0.12);
+        this.cooldowns.dash = 0.95;
+        w.sfx('dash');
+        w.fx.dust(this.x, this.y, '#ffd166', 8);
+        break;
+      }
+      case 'grapple': {
+        this.cooldowns.grapple = 1.1;
+        w.sfx('grapple');
+        // 1) Une souris sur la ligne de visee ?
+        let best: { m: (typeof w.mice)[number]; d: number } | null = null;
+        for (const m of w.mice) {
+          if (m.captured) continue;
+          const d = dist(m.x, m.y, this.x, this.y);
+          if (d > GRAPPLE_RANGE) continue;
+          const a = Math.atan2(m.y - this.y, m.x - this.x);
+          if (Math.abs(wrapAngle(a - aimAng)) > 0.4) continue;
+          if (!best || d < best.d) best = { m, d };
+        }
+        if (best) {
+          const a = Math.atan2(best.m.y - this.y, best.m.x - this.x);
+          best.m.x = this.x + Math.cos(a) * 46;
+          best.m.y = this.y + Math.sin(a) * 46;
+          best.m.applyStun(0.9);
+          w.fx.burstHit(best.m.x, best.m.y - 10, '#b3e34a');
+          w.grappleLine(this.x, this.y - 20, best.m.x, best.m.y - 10);
+          break;
+        }
+        // 2) Sinon, on se hisse vers le point vise praticable le plus loin
+        let landed: Vec2 | null = null;
+        for (let d = GRAPPLE_RANGE; d > 40; d -= 12) {
+          const px = this.x + Math.cos(aimAng) * d;
+          const py = this.y + Math.sin(aimAng) * d;
+          const t = w.nav.terrainAt(px, py);
+          const ok = t === TERR.GROUND || t === TERR.PATH || t === TERR.GRASS || t === TERR.LEDGE || t === TERR.SLICK;
+          if (ok && !w.nav.blocked(px, py, this.r, { ledge: true, gap: true, water: true })) {
+            landed = { x: px, y: py };
+            break;
+          }
+        }
+        if (landed) {
+          this.pullTo = landed;
+          this.pulling = 0.24;
+          this.onLedge = w.nav.terrainAt(landed.x, landed.y) === TERR.LEDGE;
+          w.grappleLine(this.x, this.y - 20, landed.x, landed.y);
+        } else {
+          w.fx.floatingText(this.x, this.y - 60, 'Rien à accrocher', '#b3e34a');
+        }
+        break;
+      }
+      case 'glue': {
+        this.cooldowns.glue = 1.6;
+        const d = Math.min(300, dist(this.x, this.y, cmd.aimX, cmd.aimY));
+        w.spawnGlue(this.x + Math.cos(aimAng) * d, this.y + Math.sin(aimAng) * d);
+        w.sfx('glue');
+        break;
+      }
+      case 'lure': {
+        this.cooldowns.lure = 3.5;
+        const d = Math.min(240, dist(this.x, this.y, cmd.aimX, cmd.aimY));
+        w.setLure(this.x + Math.cos(aimAng) * d, this.y + Math.sin(aimAng) * d);
+        w.sfx('lure');
+        break;
+      }
+      case 'skates': {
+        this.skating = !this.skating;
+        this.cooldowns.skates = 0.4;
+        w.sfx('skates');
+        w.fx.floatingText(this.x, this.y - 60, this.skating ? 'Patins ON' : 'Patins OFF', '#ff7ab8');
+        break;
+      }
+      case 'boomerang': {
+        this.cooldowns.boomerang = 1.5;
+        w.spawnBoomerang(this.x, this.y - 18, aimAng);
+        w.sfx('boomerang');
+        break;
+      }
+      case 'glider': {
+        this.cooldowns.glider = 0.2;
+        w.sfx('glide');
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
+  // --- Degats ---------------------------------------------------------------
+
+  hurt(amount: number, fromX: number, fromY: number, w: IWorld, ignoreInvuln = false) {
+    if (this.dead) return;
+    if (!ignoreInvuln && (this.invuln > 0 || this.dashing)) return;
+    this.hp -= amount;
+    this.invuln = INVULN_TIME;
+    const a = Math.atan2(this.y - fromY, this.x - fromX);
+    this.knock = KNOCK_TIME;
+    this.kx = Math.cos(a) * 420;
+    this.ky = Math.sin(a) * 420;
+    this.netTimer = 0;
+    this.swordTimer = 0;
+    w.sfx('hurt');
+    w.shake(10);
+    w.fx.burstHit(this.x, this.y - 20, '#ff5a6a');
+    if (this.hp <= 0) {
+      this.hp = 0;
+      this.dead = true;
+    }
+  }
+
+  heal(n: number) {
+    this.hp = Math.min(this.maxHp, this.hp + n);
+  }
+
+  celebrate() {
+    this.winTimer = 1.1;
+  }
+
+  // --- Rendu ----------------------------------------------------------------
+
+  view(): HyroView {
+    return {
+      x: this.x, y: this.y, dir: this.dir, move: this.move, anim: this.anim,
+      state: this.state, action: this.action,
+      blink: this.invuln > 0 && this.blinkPhase > 1 ? 1 : 0,
+      scale: 1,
+    };
+  }
+
+  draw(ctx: Ctx) {
+    // Trainee de vitesse
+    for (const t of this.trail) {
+      ctx.globalAlpha = t.life * 1.6;
+      ctx.beginPath();
+      ctx.ellipse(t.x, t.y - 20, 16, 22, 0, 0, TAU);
+      ctx.fillStyle = this.skating ? 'rgba(255,150,210,0.35)' : 'rgba(255,210,120,0.3)';
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    drawHyro(ctx, this.view());
+  }
+
+  /** Reticule de visee du filet (dessine sous les entites). */
+  drawReticle(ctx: Ctx, aimX: number, aimY: number, t: number) {
+    const aimAng = Math.atan2(aimY - this.y, aimX - this.x);
+    const d = Math.min(NET_RANGE, dist(this.x, this.y, aimX, aimY));
+    const px = this.x + Math.cos(aimAng) * d;
+    const py = this.y + Math.sin(aimAng) * d;
+    const ready = this.netTimer <= 0;
+    const col = ready ? '#ffffff' : '#8a8a9a';
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    dashedCircle(ctx, px, py, NET_RADIUS, 10, t * 40, rgba(col, ready ? 0.75 : 0.35), 2.5);
+    ctx.beginPath();
+    ctx.arc(px, py, 3, 0, TAU);
+    ctx.fillStyle = rgba(col, 0.9);
+    ctx.fill();
+    // Ligne de portee
+    ctx.beginPath();
+    ctx.moveTo(this.x, this.y - 12);
+    ctx.lineTo(px, py);
+    ctx.strokeStyle = rgba(col, 0.14);
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    if (this.netFlash > 0) {
+      ctx.globalAlpha = this.netFlash * 0.6;
+      ctx.beginPath();
+      ctx.arc(this.netPoint.x, this.netPoint.y, NET_RADIUS * (1.2 - this.netFlash * 0.3), 0, TAU);
+      ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      ctx.fill();
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+}
+
+export { NET_RANGE, NET_RADIUS, MAX_HP };

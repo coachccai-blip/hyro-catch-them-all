@@ -1,0 +1,18 @@
+{
+  "name": "hyro-catch-them-all",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "HYRO — jeu d'action-capture 2.5D en vue de dessus. Un chat heroique attrape des souris au filet.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "build:fast": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10"
+  }
+}

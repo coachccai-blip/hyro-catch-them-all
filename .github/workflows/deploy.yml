@@ -40,10 +40,20 @@ jobs:
       - name: Add .nojekyll
         run: touch dist/.nojekyll
 
-      - name: Setup Pages
+      # Tente d'activer Pages automatiquement. Si le jeton du workflow n'en a
+      # pas le droit (réglage du dépôt), on retombe sur une simple lecture :
+      # il suffit alors d'activer une fois Pages dans Settings → Pages →
+      # "Build and deployment" → Source : GitHub Actions.
+      - name: Setup Pages (avec activation automatique)
+        id: pages_auto
+        continue-on-error: true
         uses: actions/configure-pages@v5
         with:
           enablement: true
+
+      - name: Setup Pages
+        if: steps.pages_auto.outcome == 'failure'
+        uses: actions/configure-pages@v5
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

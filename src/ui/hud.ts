@@ -187,7 +187,7 @@ export class Hud {
       const gap = 10;
       const totalW = n * slot + (n - 1) * gap;
       let gx = (view.w - totalW) / 2;
-      const gy = view.h - 92 * fs;
+      const gy = view.h - 108 * fs;
       for (let i = 0; i < n; i++) {
         const id = s.gadgets[i];
         const sel = i === s.selected;
@@ -223,17 +223,17 @@ export class Hud {
       }
       const cur = s.gadgets[s.selected];
       if (cur) {
-        outlinedText(ctx, gadgetDef(cur as never).name, view.w / 2, view.h - 16 * fs, 20 * fs, '#ffd9a0', '#141a2b', 4);
+        outlinedText(ctx, gadgetDef(cur as never).name, view.w / 2, view.h - 24 * fs, 20 * fs, '#ffd9a0', '#141a2b', 4);
       }
     }
 
     // --- Message contextuel -------------------------------------------------
     if (s.toast) {
       const tw = ctx.measureText(s.toast).width;
-      panel(ctx, view.w / 2 - Math.max(200, tw) / 2 - 24, view.h - 176 * fs, Math.max(200, tw) + 48, 50, {
+      panel(ctx, view.w / 2 - Math.max(200, tw) / 2 - 24, view.h - 192 * fs, Math.max(200, tw) + 48, 50, {
         fill: '#1a2038', stroke: '#ffd166', radius: 14, alpha: 0.85,
       });
-      outlinedText(ctx, s.toast, view.w / 2, view.h - 151 * fs, 24 * fs, '#fff6e2', '#1a1226', 5);
+      outlinedText(ctx, s.toast, view.w / 2, view.h - 167 * fs, 24 * fs, '#fff6e2', '#1a1226', 5);
     }
 
     // --- Rappel de sortie ---------------------------------------------------

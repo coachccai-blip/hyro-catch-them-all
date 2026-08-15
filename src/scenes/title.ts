@@ -205,16 +205,17 @@ export class TitleScene extends Scene {
 
     // --- Menu ---------------------------------------------------------------
     const mh = this.menu.height(58, 12);
-    this.menu.draw(ctx, v.w / 2, v.h * 0.52 - mh / 2 + 60, Math.min(420, v.w - 80), 58, 12);
+    const menuTop = v.h * 0.52 - mh / 2 + 60;
+    this.menu.draw(ctx, v.w / 2, menuTop, Math.min(420, v.w - 80), 58, 12);
+    if (!this.game.audioStarted) {
+      outlinedText(ctx, t('tapToStart'), v.w / 2, menuTop + mh + 34, 22, '#ffd166', '#4a2a10', 5, 'center', 'normal');
+    }
 
     // Progression
     const caught = this.game.save.totalCaught();
     outlinedText(ctx, `${t('totalProgress')} : ${caught} / ${GRAND_TOTAL_MICE} ${t('mice').toLowerCase()}  ·  ${this.game.save.totalWhite()} ✦`,
       v.w / 2, v.h - 26, 20, '#fff2cf', '#4a2a10', 5, 'center', 'normal');
 
-    if (!this.game.audioStarted) {
-      outlinedText(ctx, t('tapToStart'), v.w / 2, v.h * 0.35, 22, '#ffd166', '#4a2a10', 5, 'center', 'normal');
-    }
     if (this.game.view.portrait) {
       outlinedText(ctx, '↻ Tourne ton appareil en paysage', v.w / 2, 40, 22, '#ffd166', '#4a2a10', 5, 'center', 'normal');
     }

@@ -8,6 +8,40 @@ import { overrides } from './render/overrides';
 import { TitleScene } from './scenes/title';
 import { getLevel } from './levels/levels';
 
+/**
+ * Installation sur l'écran d'accueil : Chrome/Android émet cet événement quand
+ * le jeu est installable. On le met de côté pour proposer un bouton
+ * « Installer » sur l'écran titre.
+ */
+declare global {
+  interface Window {
+    __hyroInstall?: { prompt: () => void } | null;
+  }
+}
+
+window.addEventListener('beforeinstallprompt', (e: Event) => {
+  e.preventDefault();
+  window.__hyroInstall = e as unknown as { prompt: () => void };
+});
+window.addEventListener('appinstalled', () => {
+  window.__hyroInstall = null;
+});
+
+/** Service worker : jeu jouable hors ligne et démarrage instantané. */
+function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  if (!location.protocol.startsWith('http')) return; // inutile en file://
+  const go = () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {
+      /* hors ligne indisponible : le jeu fonctionne quand meme */
+    });
+  };
+  // Le boot est asynchrone : l'evenement `load` peut deja etre passe ici,
+  // auquel cas il faut enregistrer tout de suite.
+  if (document.readyState === 'complete') go();
+  else window.addEventListener('load', go, { once: true });
+}
+
 function fatal(message: string) {
   const el = document.getElementById('fatal');
   if (el) {
@@ -44,6 +78,7 @@ async function boot() {
       game.push(new TitleScene());
     }
     game.start();
+    registerServiceWorker();
     (window as unknown as { __hyroStarted: boolean }).__hyroStarted = true;
     (window as unknown as { hyro: Game }).hyro = game;
     window.setTimeout(() => document.getElementById('boot')?.classList.add('hidden'), 260);

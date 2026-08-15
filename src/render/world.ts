@@ -59,6 +59,14 @@ export class WorldRenderer {
   private lightningTimer = 4;
   /** Qualite : reduit le nombre de particules sur mobile. */
   quality = 1;
+  /** Profilage : temps de cuisson des chunks sur la derniere frame (ms). */
+  bakeMs = 0;
+  bakeCount = 0;
+  /** Teinte ambiante + vignette pre-composees en une seule image. */
+  private atmoCanvas: HTMLCanvasElement | null = null;
+  private atmoKey = '';
+  /** Nappe de brume pre-rendue (blittee au lieu d'etre recalculee). */
+  private fogCanvas: HTMLCanvasElement | null = null;
   onThunder: (() => void) | null = null;
 
   constructor(level: GeneratedLevel) {
@@ -70,6 +78,54 @@ export class WorldRenderer {
   dispose() {
     this.chunks.clear();
     this.ambient.length = 0;
+    this.atmoCanvas = null;
+    this.fogCanvas = null;
+  }
+
+  /**
+   * Teinte ambiante et vignette ne changent jamais en cours de niveau : on les
+   * compose une fois dans une image de la taille de l'ecran, puis on la blitte.
+   * Cela remplace deux passes plein ecran (dont un degrade radial recree a
+   * chaque frame) par un seul dessin d'image.
+   */
+  private getAtmosphere(w: number, h: number): HTMLCanvasElement {
+    const key = `${Math.round(w)}x${Math.round(h)}`;
+    if (this.atmoCanvas && this.atmoKey === key) return this.atmoCanvas;
+    const p = this.pal;
+    const { canvas, ctx } = offscreen(w, h);
+    if (p.ambientAlpha > 0) {
+      ctx.fillStyle = rgba(p.ambient, p.ambientAlpha * 1.05);
+      ctx.fillRect(0, 0, w, h);
+    }
+    if (p.vignette > 0) {
+      const g = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.32, w / 2, h / 2, Math.max(w, h) * 0.78);
+      g.addColorStop(0, 'rgba(0,0,0,0)');
+      g.addColorStop(1, `rgba(0,0,0,${p.vignette})`);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, h);
+    }
+    this.atmoCanvas = canvas;
+    this.atmoKey = key;
+    return canvas;
+  }
+
+  /** Nappe de brume : une seule texture douce, etiree et deplacee. */
+  private getFog(): HTMLCanvasElement {
+    if (this.fogCanvas) return this.fogCanvas;
+    const W = 256;
+    const H = 128;
+    const { canvas, ctx } = offscreen(W, H);
+    const p = this.pal;
+    for (let i = 0; i < 5; i++) {
+      const cx = (i + 0.5) * (W / 5);
+      const g = ctx.createRadialGradient(cx, H * 0.5, 0, cx, H * 0.5, H * 0.85);
+      g.addColorStop(0, rgba(p.fog, 0.85));
+      g.addColorStop(1, rgba(p.fog, 0));
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+    }
+    this.fogCanvas = canvas;
+    return canvas;
   }
 
   // --- Ciel et parallaxe ---------------------------------------------------
@@ -341,7 +397,10 @@ export class WorldRenderer {
       return e.canvas;
     }
     const { canvas, ctx } = offscreen(CHUNK_PX, CHUNK_PX);
+    const t0 = performance.now();
     this.bakeChunk(ctx, cx, cy);
+    this.bakeMs += performance.now() - t0;
+    this.bakeCount++;
     e = { canvas, used: this.tick };
     this.chunks.set(key, e);
     if (this.chunks.size > MAX_CACHED) {
@@ -1012,42 +1071,33 @@ export class WorldRenderer {
     const p = this.pal;
     const world = this.level.def.world;
 
-    // 1) Brume au sol (mondes 3 et 4)
+    // 1) Brume au sol : texture pre-rendue, simplement etiree et decalee
     if (p.fogAlpha > 0) {
+      const fog = this.getFog();
+      const bands = this.quality < 0.75 ? 1 : 2;
       ctx.save();
-      ctx.globalAlpha = p.fogAlpha;
-      const fogPasses = this.quality < 0.75 ? 1 : 3;
-      for (let i = 0; i < fogPasses; i++) {
-        const off = ((t * (8 + i * 5) - cam.x * 0.3) % (cam.sw + 400)) - 200;
-        const y = cam.sh * (0.55 + i * 0.16);
-        const g = ctx.createRadialGradient(off, y, 0, off, y, 420);
-        g.addColorStop(0, rgba(p.fog, 0.7));
-        g.addColorStop(1, rgba(p.fog, 0));
-        ctx.fillStyle = g;
-        ctx.fillRect(0, y - 260, cam.sw, 520);
-        const g2 = ctx.createRadialGradient(cam.sw - off, y + 60, 0, cam.sw - off, y + 60, 380);
-        g2.addColorStop(0, rgba(p.fog, 0.5));
-        g2.addColorStop(1, rgba(p.fog, 0));
-        ctx.fillStyle = g2;
-        ctx.fillRect(0, y - 200, cam.sw, 480);
+      ctx.globalAlpha = p.fogAlpha * 1.3;
+      for (let i = 0; i < bands; i++) {
+        const off = ((t * (10 + i * 7) - cam.x * 0.3) % (cam.sw + 600)) - 300;
+        const y = cam.sh * (0.52 + i * 0.22);
+        ctx.drawImage(fog, off - cam.sw * 0.5, y - 220, cam.sw * 2, 440);
       }
       ctx.restore();
     }
 
-    // 2) Teinte ambiante (multiply)
-    if (p.ambientAlpha > 0) {
-      ctx.save();
-      ctx.globalCompositeOperation = 'multiply';
-      ctx.fillStyle = rgba(p.ambient, p.ambientAlpha * 1.35);
-      ctx.fillRect(0, 0, cam.sw, cam.sh);
-      ctx.restore();
-    }
+    // 2) Teinte ambiante + vignette : une seule image pre-composee (voir
+    //    getAtmosphere). Deux passes plein ecran deviennent un blit.
+    ctx.drawImage(this.getAtmosphere(cam.sw, cam.sh), 0, 0);
 
     // 3) Lumieres additives
     if (lightSources.length) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
+      const maxLights = this.quality < 0.75 ? 6 : 14;
+      let drawn = 0;
       for (const l of lightSources) {
+        if (drawn >= maxLights) break;
+        drawn++;
         const sx = (l.x - cam.x) * cam.zoom;
         const sy = (l.y - cam.y) * cam.zoom;
         const lr = l.r * cam.zoom;
@@ -1089,14 +1139,7 @@ export class WorldRenderer {
     // 5) Pluie (monde 4)
     if (world === 4) this.drawRain(ctx, cam, t);
 
-    // 6) Vignette
-    if (p.vignette > 0) {
-      const g = ctx.createRadialGradient(cam.sw / 2, cam.sh / 2, Math.min(cam.sw, cam.sh) * 0.32, cam.sw / 2, cam.sh / 2, Math.max(cam.sw, cam.sh) * 0.78);
-      g.addColorStop(0, 'rgba(0,0,0,0)');
-      g.addColorStop(1, `rgba(0,0,0,${p.vignette})`);
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, cam.sw, cam.sh);
-    }
+    // 6) Vignette : deja incluse dans l'image d'ambiance
 
     // 7) Eclair
     if (this.lightning > 0.02) {
@@ -1106,7 +1149,7 @@ export class WorldRenderer {
   }
 
   private drawRain(ctx: Ctx, cam: Camera, t: number) {
-    const count = Math.floor(260 * this.quality);
+    const count = Math.floor((this.quality < 0.75 ? 110 : 240) * this.quality * 2);
     ctx.save();
     ctx.strokeStyle = 'rgba(190,215,255,0.42)';
     ctx.lineWidth = 1.6;

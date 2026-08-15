@@ -247,14 +247,17 @@ export function panel(
   g.addColorStop(1, shade(fill, -0.14));
   ctx.fillStyle = g;
   ctx.fill();
+  // Halo de selection : un double contour plutot qu'un shadowBlur, bien plus
+  // rapide (le flou d'ombre est l'une des operations les plus couteuses du
+  // canvas 2D, surtout sur mobile).
   if (glowColor) {
-    ctx.shadowColor = glowColor;
-    ctx.shadowBlur = 22;
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = rgba(typeof glowColor === 'string' && glowColor.startsWith('#') ? glowColor : stroke, 0.22);
+    ctx.stroke();
   }
   ctx.lineWidth = 3;
   ctx.strokeStyle = stroke;
   ctx.stroke();
-  ctx.shadowBlur = 0;
   // Lisere interieur pour l'effet "carton epais"
   roundRect(ctx, x + 5, y + 5, w - 10, h - 10, Math.max(4, radius - 6));
   ctx.lineWidth = 1.5;

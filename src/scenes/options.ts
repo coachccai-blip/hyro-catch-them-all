@@ -47,7 +47,7 @@ export class OptionsScene extends Scene {
       { id: 'aim', label: t('aimAssist'), kind: 'toggle', value: s.aimAssist ? 1 : 0 },
       { id: 'big', label: t('bigText'), kind: 'toggle', value: s.bigText ? 1 : 0 },
       { id: 'fps', label: t('showFps'), kind: 'toggle', value: s.showFps ? 1 : 0 },
-      { id: 'quality', label: t('quality'), kind: 'choice', choices: [t('qualityAuto'), t('qualityLow'), t('qualityHigh')], value: s.quality === 'low' ? 1 : s.quality === 'high' ? 2 : 0 },
+      { id: 'quality', label: t('quality'), kind: 'choice', hint: t('qualityHint'), choices: [t('qualityAuto'), t('qualityLow'), t('qualityHigh')], value: s.quality === 'low' ? 1 : s.quality === 'high' ? 2 : 0 },
       { id: 'keys', label: t('remapKeys'), kind: 'button' },
       { id: 'pad', label: t('remapPad'), kind: 'button' },
       { id: 'reset', label: t('resetSave'), kind: 'button', danger: true },

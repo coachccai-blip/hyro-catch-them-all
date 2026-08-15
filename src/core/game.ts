@@ -54,6 +54,10 @@ export class Game {
     this.save = new SaveStore();
     setLang(this.save.settings.lang);
     this.input = new Input(canvas);
+    // Sur telephone on demarre volontairement en dessous de la resolution
+    // maximale : mieux vaut monter en finesse si l'appareil suit que d'ouvrir
+    // le jeu sur trois secondes de saccades.
+    if (this.input.touchAvailable) this.renderScale = 0.8;
     this.input.keys = this.save.settings.keys;
     this.input.pad = this.save.settings.pad;
     audio.setVolumes(this.save.settings.musicVol, this.save.settings.sfxVol);
@@ -76,8 +80,23 @@ export class Game {
     this.resize();
   }
 
+  /**
+   * Resolution de rendu. Le jeu est limite par le nombre de pixels a remplir
+   * (ciel, brume, lumieres, vignette se superposent) : baisser la resolution
+   * interne est de loin le levier le plus efficace sur telephone. L'image est
+   * ensuite reetiree par le navigateur, ce qui reste tres propre sur des
+   * aplats cartoon.
+   */
+  renderScale = 1;
+  private perfSamples: number[] = [];
+  private perfCooldown = 0;
+
+  private maxDpr(): number {
+    return this.isMobile() ? 1.5 : 2;
+  }
+
   resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, this.isMobile() ? 1.6 : 2);
+    const dpr = Math.max(0.5, Math.min(window.devicePixelRatio || 1, this.maxDpr()) * this.renderScale);
     const cssW = this.canvas.clientWidth || window.innerWidth;
     const cssH = this.canvas.clientHeight || window.innerHeight;
     const pw = Math.max(320, Math.floor(cssW * dpr));
@@ -102,6 +121,38 @@ export class Game {
 
   isMobile(): boolean {
     return this.input.touchAvailable && Math.min(window.innerWidth, window.innerHeight) < 900;
+  }
+
+  private setRenderScale(v: number) {
+    const nv = clamp(v, 0.5, 1);
+    if (Math.abs(nv - this.renderScale) < 0.01) return;
+    this.renderScale = nv;
+    this.resize();
+  }
+
+  /**
+   * Ajuste la resolution interne d'apres le temps de frame median : on vise
+   * ~60 FPS, quitte a rendre un peu moins fin. Mediane (et non moyenne) pour
+   * ignorer les a-coups ponctuels, plus un temps de garde entre deux
+   * changements afin d'eviter les oscillations.
+   */
+  private adaptResolution(dt: number) {
+    this.perfCooldown -= dt;
+    if (this.perfCooldown > 0) return; // on laisse la frame se stabiliser
+    this.perfSamples.push(dt * 1000);
+    if (this.perfSamples.length < 45) return;
+    const sorted = this.perfSamples.slice().sort((a, b) => a - b);
+    const med = sorted[sorted.length >> 1];
+    this.perfSamples.length = 0;
+    if (med > 20.5 && this.renderScale > 0.5) {
+      // Plus on est loin de la cible, plus la marche est grande : on converge
+      // en une seconde ou deux au lieu de trainer.
+      this.perfCooldown = 0.7;
+      this.setRenderScale(this.renderScale - (med > 28 ? 0.18 : 0.1));
+    } else if (med < 14 && this.renderScale < 1) {
+      this.perfCooldown = 2.5;
+      this.setRenderScale(this.renderScale + 0.08);
+    }
   }
 
   // --- Pile de scenes -------------------------------------------------------
@@ -158,12 +209,17 @@ export class Game {
     if (this.fpsSamples.length > 40) this.fpsSamples.shift();
     this.fps = this.fpsSamples.reduce((a, b) => a + b, 0) / this.fpsSamples.length;
     const q = this.save.settings.quality;
-    if (q === 'low') this.quality = 0.5;
-    else if (q === 'high') this.quality = 1;
-    else {
+    if (q === 'low') {
+      this.quality = 0.5;
+      this.setRenderScale(0.62);
+    } else if (q === 'high') {
+      this.quality = 1;
+      this.setRenderScale(1);
+    } else {
       if (this.fps < 45) this.lowFrames++;
       else this.lowFrames = Math.max(0, this.lowFrames - 1);
       this.quality = this.lowFrames > 60 ? 0.5 : 1;
+      this.adaptResolution(dt);
     }
 
     this.input.update(dt);

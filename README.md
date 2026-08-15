@@ -13,8 +13,14 @@ de **cinq niveaux** semi-ouverts, débloque **huit gadgets** et affronte
 ## Jouer
 
 - **En ligne** : **https://coachccai-blip.github.io/hyro-catch-them-all/**
-- **Hors ligne** : `npm run build:single` produit `dist/hyro.html`, le jeu
-  entier dans un seul fichier — il suffit de double-cliquer dessus.
+- **Sur téléphone (recommandé)** : ouvrez le lien, puis « Ajouter à l'écran
+  d'accueil » (Android : menu ⋮ → *Installer l'application*, ou le bouton
+  **INSTALLER LE JEU** de l'écran titre ; iOS : Partager → *Sur l'écran
+  d'accueil*). Le jeu s'installe comme une app, démarre en plein écran sans
+  barre de navigateur et **fonctionne ensuite entièrement hors ligne**.
+- **Fichier unique** : `npm run build:single` produit `dist/hyro.html`, le jeu
+  entier dans un seul fichier — il suffit de double-cliquer dessus, sans
+  serveur ni connexion.
 - **En local** :
 
 ```bash
@@ -197,11 +203,41 @@ aussi bien à la racine d'un domaine que dans un sous-dossier.
 
 ---
 
-## Performance & accessibilité
+## Performance
 
-- Cible 60 FPS desktop, 30–60 FPS mobile : sol pré-cuit, culling hors écran,
-  particules poolées, halos et ombres pré-rendus, qualité adaptative
-  automatique si les FPS chutent (réglable dans les options).
+Le jeu est limité par le **remplissage de pixels** (ciel, brume, lumières,
+vignette et décors se superposent), pas par le JavaScript : mesuré au
+navigateur, la logique tient en ~1 ms par image, tout le reste est de la
+rasterisation. Les optimisations suivent donc cette contrainte :
+
+- **Résolution de rendu adaptative** — le levier principal. Le jeu mesure la
+  médiane du temps d'image et ajuste la résolution interne pour tenir 60 FPS ;
+  l'image est ensuite ré-étirée par le navigateur, ce qui reste propre sur des
+  aplats cartoon. Sur téléphone il démarre volontairement un cran en dessous
+  puis remonte si l'appareil suit. Réglable dans les options (Auto / Basse /
+  Haute).
+- **Ambiance pré-composée** — teinte ambiante et vignette sont fusionnées dans
+  une seule image mise en cache : deux passes plein écran par image (dont un
+  dégradé radial recréé à chaque fois) deviennent un simple blit.
+- **Brume pré-rendue** en petite texture étirée, au lieu de six dégradés
+  radiaux recalculés par image.
+- **Halos et ombres** dessinés depuis des sprites mis en cache, **nombre de
+  lumières borné** et trié par proximité, **flou d'ombre (`shadowBlur`)
+  proscrit** — c'est l'opération la plus coûteuse du canvas 2D sur mobile.
+- **Sol cuit par chunks** avec cache LRU (≈1,5 ms par chunk, aucun à-coup
+  mesuré en déplacement), culling hors écran, particules poolées.
+
+Résultat mesuré sur un profil téléphone (844×390, rendu logiciel, niveau le
+plus chargé du jeu — 165 lumières, 850 décors) : **36 → 58 FPS**, sans aucune
+image au-delà de 40 ms, et *sans* dégrader les effets. Sur un vrai GPU de
+téléphone la marge est bien plus large.
+
+Le **service worker** met le jeu en cache dès la première ouverture : les
+lancements suivants sont instantanés et fonctionnent sans réseau.
+
+## Accessibilité
+
+- Qualité adaptative automatique (réglable dans les options).
 - Texte contrasté et cerclé, option texte agrandi, réduction du tremblement
   d'écran, symboles en plus des couleurs pour les bandanas, aide à la visée
   activable, pause à tout moment.

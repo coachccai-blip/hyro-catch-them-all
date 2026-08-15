@@ -559,13 +559,22 @@ export class World implements IWorld, BossWorld {
 
   // --- Rendu ----------------------------------------------------------------
 
+  /** Profilage par phase de rendu (ms), lu par le mode debug. */
+  prof = { bg: 0, ground: 0, sorted: 0, fx: 0, overlay: 0, bake: 0, bakes: 0 };
+
   draw(ctx: Ctx) {
     const cam = this.camera;
+    const T = () => performance.now();
+    let t0 = T();
+    this.renderer.bakeMs = 0;
+    this.renderer.bakeCount = 0;
     const shake = this.shakePower;
     const ox = shake > 0.2 ? (Math.random() - 0.5) * shake : 0;
     const oy = shake > 0.2 ? (Math.random() - 0.5) * shake : 0;
 
     this.renderer.drawBackground(ctx, cam, this.time);
+    this.prof.bg = T() - t0;
+    t0 = T();
 
     ctx.save();
     ctx.scale(cam.zoom, cam.zoom);
@@ -574,21 +583,30 @@ export class World implements IWorld, BossWorld {
     this.renderer.drawGround(ctx, cam);
     this.renderer.drawFloorFx(ctx, cam, this.time);
     this.drawGroundOverlays(ctx);
+    this.prof.ground = T() - t0;
+    t0 = T();
 
     if (!this.finished && !this.failed) {
       this.player.drawReticle(ctx, this.lastAimX, this.lastAimY, this.time);
     }
 
     this.drawSorted(ctx);
+    this.prof.sorted = T() - t0;
+    t0 = T();
 
     this.fx.draw(ctx);
     this.drawForeground(ctx);
     this.renderer.drawAmbient(ctx, this.time);
+    this.prof.fx = T() - t0;
+    t0 = T();
 
     ctx.restore();
 
     const lights = this.collectLights();
     this.renderer.drawOverlay(ctx, cam, this.time, lights);
+    this.prof.overlay = T() - t0;
+    this.prof.bake = this.renderer.bakeMs;
+    this.prof.bakes = this.renderer.bakeCount;
 
     // Le radar dessine par-dessus l'ambiance pour rester lisible
     if (this.radarActive) this.drawRadar(ctx);
@@ -604,11 +622,16 @@ export class World implements IWorld, BossWorld {
   private collectLights() {
     const out: { x: number; y: number; r: number; color: string; intensity: number }[] = [];
     const cam = this.camera;
+    const ccx = cam.x + cam.w / 2;
+    const ccy = cam.y + cam.h / 2;
     for (const l of this.level.lights) {
       if (l.x < cam.x - l.r || l.x > cam.x + cam.w + l.r || l.y < cam.y - l.r || l.y > cam.y + cam.h + l.r) continue;
       const fl = 1 - l.flicker * 0.5 * (0.5 + 0.5 * Math.sin(this.time * 7 + l.x));
       out.push({ x: l.x, y: l.y, r: l.r, color: l.color, intensity: l.intensity * fl });
-      if (out.length > 22) break;
+    }
+    // Les plus proches d'abord : le rendu n'en garde qu'un nombre borne.
+    if (out.length > 6) {
+      out.sort((a, b) => dist(a.x, a.y, ccx, ccy) - dist(b.x, b.y, ccx, ccy));
     }
     for (const f of this.fondues) {
       out.push({ x: f.x, y: f.y, r: f.r * 2.4, color: '#ff8a2b', intensity: 0.8 });

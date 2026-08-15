@@ -41,6 +41,8 @@ export class TitleScene extends Scene {
     if (hasProgress) items.push({ id: 'continue', label: t('continue'), kind: 'button' as const });
     items.push({ id: 'play', label: hasProgress ? t('worlds') : t('play'), kind: 'button' as const });
     items.push({ id: 'options', label: t('options'), kind: 'button' as const });
+    // Proposé uniquement si le navigateur signale que le jeu est installable
+    if (window.__hyroInstall) items.push({ id: 'install', label: t('install'), kind: 'button' as const });
     items.push({ id: 'credits', label: t('credits'), kind: 'button' as const });
     this.menu = new Menu(items);
     this.game.input.clearTouchButtons();
@@ -85,6 +87,11 @@ export class TitleScene extends Scene {
         break;
       case 'options':
         this.game.push(new OptionsScene(false));
+        break;
+      case 'install':
+        window.__hyroInstall?.prompt();
+        window.__hyroInstall = null;
+        this.enter(); // le bouton disparait une fois l'installation lancee
         break;
       case 'credits':
         this.game.push(new CreditsScene());

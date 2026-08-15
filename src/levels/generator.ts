@@ -255,7 +255,21 @@ export function generateLevel(def: LevelDef): GeneratedLevel {
 
   // --- Salle de depart ------------------------------------------------------
   rooms[0].isSpawn = true;
-  const spawn: Vec2 = { x: (rooms[0].cx + 0.5) * CELL, y: (rooms[0].cy + 0.5) * CELL };
+  // Le centre geometrique d'une salle peut avoir ete recouvert (eau, gouffre,
+  // mur d'une salle voisine) : on cherche la cellule praticable la plus proche.
+  let spawnCell = findWalkableNear(grid, cols, rows, rooms[0].cx, rooms[0].cy, 10);
+  if (!spawnCell) {
+    for (const r of rooms) {
+      spawnCell = findWalkableNear(grid, cols, rows, r.cx, r.cy, 10);
+      if (spawnCell) {
+        rooms[0].isSpawn = false;
+        r.isSpawn = true;
+        break;
+      }
+    }
+  }
+  if (!spawnCell) spawnCell = { cx: Math.floor(cols / 2), cy: Math.floor(rows / 2) };
+  const spawn: Vec2 = { x: (spawnCell.cx + 0.5) * CELL, y: (spawnCell.cy + 0.5) * CELL };
 
   // --- Zones verrouillees ---------------------------------------------------
   const barriers: Barrier[] = [];
@@ -277,7 +291,13 @@ export function generateLevel(def: LevelDef): GeneratedLevel {
   }
 
   // --- Connectivite ---------------------------------------------------------
-  ensureConnectivity(grid, cols, rows, rooms[0], barriers, solid);
+  // On supprime toute poche isolee, puis on memorise les cellules réellement
+  // atteignables depuis le depart (barrieres considerees comme ouvrables) :
+  // souris et mobs ne seront places que la, ce qui garantit le 100 %.
+  ensureConnectivity(grid, cols, rows, spawnCell, barriers, solid);
+  // Flood « strict » : sans traverser eau ni gouffre. C'est la garantie qu'une
+  // souris est toujours attrapable, meme sans le gadget correspondant.
+  const reachable = floodFill(grid, cols, rows, spawnCell, barriers, false);
 
   // --- Ancrages de grappin et cachettes ------------------------------------
   const anchors: Vec2[] = [];
@@ -302,8 +322,8 @@ export function generateLevel(def: LevelDef): GeneratedLevel {
   }
 
   // --- Souris ---------------------------------------------------------------
-  const mice = placeMice(grid, cols, rows, rooms, lockedRooms, rng, def, hideSpots);
-  const mobs = placeMobs(grid, cols, rows, rooms, rng, def, barriers);
+  const mice = placeMice(grid, cols, rows, rooms, lockedRooms, rng, def, hideSpots, reachable, spawn);
+  const mobs = placeMobs(grid, cols, rows, rooms, rng, def, barriers, reachable);
 
   return {
     def, cols, rows, w: cols * CELL, h: rows * CELL,
@@ -659,7 +679,9 @@ function sealRoom(
       barrier.buttonPos = { x: px - dx * CELL * 11, y: py - dy * CELL * 11 };
       barrier.open = false;
     } else if (lock === 'guard') {
-      barrier.guardPos = { x: px - dx * CELL * 1.6, y: py - dy * CELL * 1.6 };
+      // Le rat de garde se tient du cote ACCESSIBLE de la porte (sinon le
+      // leurre ne pourrait jamais l'atteindre).
+      barrier.guardPos = { x: px + dx * CELL * 1.8, y: py + dy * CELL * 1.8 };
       barrier.open = false;
     } else if (lock === 'hidden' || lock === 'slick') {
       barrier.open = false;
@@ -669,15 +691,39 @@ function sealRoom(
   return null;
 }
 
-/** Supprime les poches inaccessibles (sauf salles verrouillees). */
-function ensureConnectivity(
-  grid: Uint8Array, cols: number, rows: number, start: RoomRect, barriers: Barrier[], solid: Terrain,
-) {
+/** Cellule praticable la plus proche d'un point (recherche en spirale). */
+function findWalkableNear(
+  grid: Uint8Array, cols: number, rows: number, cx: number, cy: number, maxR: number,
+): { cx: number; cy: number } | null {
+  const idx = (x: number, y: number) => y * cols + x;
+  for (let r = 0; r <= maxR; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        const x = cx + dx;
+        const y = cy + dy;
+        if (x < 2 || y < 2 || x >= cols - 2 || y >= rows - 2) continue;
+        const t = grid[idx(x, y)];
+        if (t === TERR.GROUND || t === TERR.PATH || t === TERR.GRASS) return { cx: x, cy: y };
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Supprime les poches inaccessibles et retourne les cellules atteignables
+ * depuis le depart (les barrieres sont franchissables : elles s'ouvriront).
+ */
+function floodFill(
+  grid: Uint8Array, cols: number, rows: number, start: { cx: number; cy: number },
+  barriers: Barrier[], crossGadgetTerrain: boolean,
+): Uint8Array {
   const idx = (cx: number, cy: number) => cy * cols + cx;
   const seen = new Uint8Array(cols * rows);
   const stack: number[] = [idx(start.cx, start.cy)];
   seen[stack[0]] = 1;
-  // Les cellules de barriere sont considerees traversables pour l'analyse
+  // Les cellules de barriere sont traversables : elles finiront par s'ouvrir.
   const barrierCells = new Set<number>();
   for (const b of barriers) for (const c of b.cells) barrierCells.add(c);
 
@@ -690,14 +736,32 @@ function ensureConnectivity(
       if (n < 0 || n >= grid.length || seen[n]) continue;
       const nx = n % cols;
       if (Math.abs(nx - cx) > 1) continue;
-      if (!isWalkable(grid[n]) && !barrierCells.has(n)) continue;
+      const t = grid[n];
+      const passable = isWalkable(t)
+        || barrierCells.has(n)
+        || (crossGadgetTerrain && (t === TERR.WATER || t === TERR.GAP || t === TERR.LEDGE));
+      if (!passable) continue;
       seen[n] = 1;
       stack.push(n);
     }
   }
+  return seen;
+}
+
+/**
+ * Supprime les poches definitivement inaccessibles. Le flood est ici permissif
+ * (eau, gouffres et passerelles se franchissent avec les gadgets), pour ne pas
+ * amputer la carte de zones que le joueur pourra atteindre plus tard.
+ */
+function ensureConnectivity(
+  grid: Uint8Array, cols: number, rows: number, start: { cx: number; cy: number },
+  barriers: Barrier[], solid: Terrain,
+): Uint8Array {
+  const seen = floodFill(grid, cols, rows, start, barriers, true);
   for (let i = 0; i < grid.length; i++) {
     if (isWalkable(grid[i]) && !seen[i]) grid[i] = solid === TERR.VOID ? TERR.VOID : TERR.WALL;
   }
+  return seen;
 }
 
 // --- Decors -----------------------------------------------------------------
@@ -788,7 +852,7 @@ function scatterProps(
         const x = cx * CELL + rng.range(4, CELL - 4);
         const y = cy * CELL + rng.range(4, CELL - 4);
         props.push({
-          kind: 'grassTuft', x, y, s: rng.range(1.1, 1.8), rot: 0, seed: rng.int(0, 9999),
+          kind: 'grassTuft', x, y, s: rng.range(0.95, 1.45), rot: 0, seed: rng.int(0, 9999),
           blocking: false, r: 0, hide: true, layer: 'sorted', anim: true,
         });
       }
@@ -858,14 +922,30 @@ function addNarrativeDecals(
 
 // --- Peuplement -------------------------------------------------------------
 
-function randomWalkable(grid: Uint8Array, cols: number, rows: number, room: RoomRect, rng: Rng): Vec2 | null {
+/**
+ * Position praticable ET atteignable dans une salle.
+ * Retourne null si la salle n'offre aucun emplacement valide : l'appelant
+ * choisira alors une autre salle (aucune souris ne doit etre inatteignable).
+ */
+function randomWalkable(
+  grid: Uint8Array, cols: number, rows: number, room: RoomRect, rng: Rng, reach: Uint8Array,
+): Vec2 | null {
   const idx = (cx: number, cy: number) => cy * cols + cx;
+  const ok = (cx: number, cy: number) => {
+    const t = grid[idx(cx, cy)];
+    return reach[idx(cx, cy)] === 1 && (t === TERR.GROUND || t === TERR.PATH || t === TERR.GRASS);
+  };
   for (let i = 0; i < 40; i++) {
     const cx = clamp(room.x + rng.int(0, room.w - 1), 2, cols - 3);
     const cy = clamp(room.y + rng.int(0, room.h - 1), 2, rows - 3);
-    const t = grid[idx(cx, cy)];
-    if (t === TERR.GROUND || t === TERR.PATH || t === TERR.GRASS) {
+    if (ok(cx, cy)) {
       return { x: (cx + 0.5) * CELL + rng.range(-14, 14), y: (cy + 0.5) * CELL + rng.range(-14, 14) };
+    }
+  }
+  // Balayage exhaustif de la salle en dernier recours
+  for (let cy = Math.max(2, room.y); cy < Math.min(rows - 2, room.y + room.h); cy++) {
+    for (let cx = Math.max(2, room.x); cx < Math.min(cols - 2, room.x + room.w); cx++) {
+      if (ok(cx, cy)) return { x: (cx + 0.5) * CELL, y: (cy + 0.5) * CELL };
     }
   }
   return null;
@@ -873,17 +953,33 @@ function randomWalkable(grid: Uint8Array, cols: number, rows: number, room: Room
 
 function placeMice(
   grid: Uint8Array, cols: number, rows: number, rooms: RoomRect[], lockedRooms: RoomRect[],
-  rng: Rng, def: LevelDef, hideSpots: Vec2[],
+  rng: Rng, def: LevelDef, hideSpots: Vec2[], reach: Uint8Array, fallback: Vec2,
 ): MouseSpawn[] {
   const out: MouseSpawn[] = [];
-  const freeRooms = rooms.filter((r) => !r.locked && !r.isSpawn);
-  const pool = freeRooms.length ? freeRooms : rooms;
+  // On ne garde que les salles offrant au moins un emplacement atteignable.
+  const usableLocked = lockedRooms.filter((r) => randomWalkable(grid, cols, rows, r, rng, reach) !== null);
+  const freeRooms = rooms.filter((r) => !r.locked && !r.isSpawn
+    && randomWalkable(grid, cols, rows, r, rng, reach) !== null);
+  const anyRoom = rooms.filter((r) => randomWalkable(grid, cols, rows, r, rng, reach) !== null);
+  const pool = freeRooms.length ? freeRooms : (anyRoom.length ? anyRoom : rooms);
   let n = 0;
 
-  const push = (kind: MouseKind, room: RoomRect, locked: boolean) => {
-    const p = randomWalkable(grid, cols, rows, room, rng) ?? { x: (room.cx + 0.5) * CELL, y: (room.cy + 0.5) * CELL };
+  const push = (kind: MouseKind, room: RoomRect) => {
+    let p = randomWalkable(grid, cols, rows, room, rng, reach);
+    let locked = !!room.locked;
+    if (!p) {
+      // Repli : n'importe quelle salle valide, sinon la position de depart
+      for (const r of rng.shuffle(anyRoom.slice())) {
+        p = randomWalkable(grid, cols, rows, r, rng, reach);
+        if (p) {
+          locked = !!r.locked;
+          break;
+        }
+      }
+    }
+    const pos = p ?? fallback;
     const hide = hideSpots.length ? hideSpots[rng.int(0, hideSpots.length - 1)] : undefined;
-    out.push({ id: `${def.id}#${n++}`, kind, x: p.x, y: p.y, locked, hideAt: hide });
+    out.push({ id: `${def.id}#${n++}`, kind, x: pos.x, y: pos.y, locked, hideAt: hide });
   };
 
   // La souris Blanche va dans une zone verrouillee si possible
@@ -891,13 +987,11 @@ function placeMice(
   for (const [kind, count] of entries) {
     for (let i = 0; i < (count ?? 0); i++) {
       if (kind === 'white') {
-        const room = lockedRooms.length ? lockedRooms[0] : rng.pick(pool);
-        push('white', room, !!room.locked);
+        push('white', usableLocked.length ? usableLocked[0] : rng.pick(pool));
       } else {
         // Une partie des souris peuple les zones verrouillees (bonus 100 %)
-        const useLocked = lockedRooms.length > 0 && rng.bool(0.14);
-        const room = useLocked ? rng.pick(lockedRooms) : rng.pick(pool);
-        push(kind, room, !!room.locked);
+        const useLocked = usableLocked.length > 0 && rng.bool(0.14);
+        push(kind, useLocked ? rng.pick(usableLocked) : rng.pick(pool));
       }
     }
   }
@@ -906,15 +1000,15 @@ function placeMice(
 
 function placeMobs(
   grid: Uint8Array, cols: number, rows: number, rooms: RoomRect[], rng: Rng,
-  def: LevelDef, barriers: Barrier[],
+  def: LevelDef, barriers: Barrier[], reach: Uint8Array,
 ): MobSpawn[] {
   const out: MobSpawn[] = [];
-  const pool = rooms.filter((r) => !r.isSpawn);
+  const pool = rooms.filter((r) => !r.isSpawn && randomWalkable(grid, cols, rows, r, rng, reach) !== null);
   const usable = pool.length ? pool : rooms;
   for (const [kind, count] of Object.entries(def.mobs) as [MobKind, number][]) {
     for (let i = 0; i < (count ?? 0); i++) {
       const room = rng.pick(usable);
-      const p = randomWalkable(grid, cols, rows, room, rng);
+      const p = randomWalkable(grid, cols, rows, room, rng, reach);
       if (p) out.push({ kind, x: p.x, y: p.y });
     }
   }
@@ -924,10 +1018,12 @@ function placeMobs(
       out.push({ kind: 'guard', x: b.guardPos.x, y: b.guardPos.y, guardBarrier: b.id });
     }
   }
-  // Mini-boss au centre de la salle la plus eloignee
+  // Mini-boss dans la salle la plus eloignee du depart
   if (def.miniBoss) {
     const far = usable[usable.length - 1];
-    out.push({ kind: def.miniBoss, x: (far.cx + 0.5) * CELL, y: (far.cy + 0.5) * CELL, guardBarrier: -2 });
+    const p = randomWalkable(grid, cols, rows, far, rng, reach)
+      ?? { x: (far.cx + 0.5) * CELL, y: (far.cy + 0.5) * CELL };
+    out.push({ kind: def.miniBoss, x: p.x, y: p.y, guardBarrier: -2 });
   }
   return out;
 }

@@ -65,7 +65,7 @@ export class Hud {
       { id: 'gadget', action: 'gadgetUse', x: w - 152 * k, y: h - 312 * k, r: 58 * k, label: 'gadget' },
       { id: 'cycle', action: 'gadgetNext', x: w - 288 * k, y: h - 272 * k, r: 42 * k, label: 'cycle' },
       { id: 'interact', action: 'interact', x: w - 358 * k, y: h - 236 * k, r: 40 * k, label: 'E' },
-      { id: 'pause', action: 'pause', x: w - 58, y: 58, r: 34, label: 'pause' },
+      { id: 'pause', action: 'pause', x: 58, y: 138, r: 34, label: 'pause' },
     ];
     return this.touch;
   }

@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0d1220" />
+    <meta name="description" content="HYRO — Attrapez-les tous ! Un chat heroique capture des souris a bandana dans cinq mondes." />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>HYRO — Attrapez-les tous !</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #080b14;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: var(--bg);
+        font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-user-select: none;
+        user-select: none;
+        touch-action: none;
+        overscroll-behavior: none;
+      }
+      #app {
+        position: fixed;
+        inset: 0;
+        display: block;
+      }
+      canvas#game {
+        display: block;
+        width: 100%;
+        height: 100%;
+        image-rendering: auto;
+        touch-action: none;
+      }
+      /* Ecran de chargement, retire par le jeu une fois le boot termine */
+      #boot {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        background: radial-gradient(circle at 50% 40%, #1b2544 0%, #080b14 70%);
+        color: #f7e7bd;
+        z-index: 10;
+        transition: opacity 0.5s ease;
+      }
+      #boot .logo {
+        font-size: clamp(38px, 9vw, 84px);
+        letter-spacing: 0.16em;
+        font-weight: 900;
+        text-shadow: 0 4px 0 #b7642c, 0 8px 22px rgba(0, 0, 0, 0.6);
+      }
+      #boot .sub { font-size: clamp(12px, 3vw, 18px); opacity: 0.75; letter-spacing: 0.22em; }
+      #boot .bar { width: min(320px, 60vw); height: 8px; border-radius: 99px; background: #ffffff22; overflow: hidden; }
+      #boot .bar i { display: block; height: 100%; width: 30%; border-radius: 99px; background: linear-gradient(90deg,#ffd166,#f78c3b); animation: slide 1.1s ease-in-out infinite; }
+      @keyframes slide { 0% { margin-left: -32%; } 100% { margin-left: 100%; } }
+      #boot.hidden { opacity: 0; pointer-events: none; }
+      #fatal {
+        position: fixed; inset: 0; z-index: 20; display: none;
+        padding: 24px; color: #ffd9d9; background: #16060a; font-family: monospace;
+        white-space: pre-wrap; overflow: auto; font-size: 13px;
+      }
+    </style>
+    <script type="module" crossorigin src="./assets/index-CEwam0YD.js"></script>
+  </head>
+  <body>
+    <div id="app"><canvas id="game"></canvas></div>
+    <div id="boot">
+      <div class="logo">HYRO</div>
+      <div class="sub">ATTRAPEZ-LES TOUS</div>
+      <div class="bar"><i></i></div>
+    </div>
+    <pre id="fatal"></pre>
+  </body>
+</html>

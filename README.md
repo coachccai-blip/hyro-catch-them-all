@@ -12,7 +12,9 @@ de **cinq niveaux** semi-ouverts, débloque **huit gadgets** et affronte
 
 ## Jouer
 
-- **En ligne** : voir l'onglet *Deployments* / GitHub Pages du dépôt.
+- **En ligne** : **https://coachccai-blip.github.io/hyro-catch-them-all/**
+- **Hors ligne** : `npm run build:single` produit `dist/hyro.html`, le jeu
+  entier dans un seul fichier — il suffit de double-cliquer dessus.
 - **En local** :
 
 ```bash

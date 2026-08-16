@@ -1310,6 +1310,38 @@ const drawFurnace: DrawFn = (ctx, p, c) => {
 // COMMUN
 // ---------------------------------------------------------------------------
 
+/** Trou de souris : galerie que seules les souris empruntent. */
+const drawMouseHole: DrawFn = (ctx, p, c) => {
+  const s = p.s * 20;
+  // Halo sombre pour que le trou se detache du sol
+  ctx.beginPath();
+  ctx.ellipse(p.x, p.y, s * 1.15, s * 0.8, 0, 0, TAU);
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  ctx.fill();
+  // Arche
+  ctx.beginPath();
+  ctx.moveTo(p.x - s * 0.72, p.y + s * 0.34);
+  ctx.quadraticCurveTo(p.x - s * 0.72, p.y - s * 0.85, p.x, p.y - s * 0.85);
+  ctx.quadraticCurveTo(p.x + s * 0.72, p.y - s * 0.85, p.x + s * 0.72, p.y + s * 0.34);
+  ctx.closePath();
+  ctx.fillStyle = '#120d16';
+  ctx.fill();
+  ctx.strokeStyle = c.pal.ink;
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  // Terre remuee au seuil + petites empreintes
+  ctx.beginPath();
+  ctx.ellipse(p.x, p.y + s * 0.38, s * 0.8, s * 0.2, 0, 0, TAU);
+  ctx.fillStyle = 'rgba(120,90,60,0.55)';
+  ctx.fill();
+  for (let i = 0; i < 3; i++) {
+    ctx.beginPath();
+    ctx.ellipse(p.x - s * 0.4 + i * s * 0.4, p.y + s * 0.6, 2.4, 3.2, 0, 0, TAU);
+    ctx.fillStyle = 'rgba(60,45,30,0.5)';
+    ctx.fill();
+  }
+};
+
 const drawCheesePile: DrawFn = (ctx, p, c) => {
   const s = p.s * 18;
   groundShadow(ctx, p.x, p.y, s * 1.1, s * 0.32, 0.26);
@@ -1342,7 +1374,7 @@ const DRAWERS: Record<string, DrawFn> = {
   cheeseWheel: drawCheeseWheel, gear: drawGear, pipeSteam: drawPipeSteam, pillar: drawPillar,
   banner: drawBanner, vat: drawVat, chain: drawChain, crateCheese: drawCrateCheese,
   lampIndus: drawLampIndus, rivetPlate: drawRivetPlate, boltPile: drawBoltPile, furnace: drawFurnace,
-  cheesePile: drawCheesePile,
+  cheesePile: drawCheesePile, mouseHole: drawMouseHole,
 };
 
 export function drawProp(ctx: Ctx, p: Prop, c: PropDrawCtx) {

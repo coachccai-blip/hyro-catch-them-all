@@ -34,6 +34,15 @@ const INVULN_TIME = 1.25;
 const KNOCK_TIME = 0.3;
 const DASH_TIME = 0.2;
 const DASH_SPEED = 720;
+// --- Ruee de base -------------------------------------------------------
+// Disponible des le premier niveau, sans gadget : c'est l'outil d'esquive
+// face aux mines, bombes et missiles des souris armees. Plus courte que le
+// Dash-griffes et surtout **incapable de franchir un gouffre** — le gadget
+// garde donc tout son role de cle de progression.
+const DODGE_TIME = 0.17;
+const DODGE_SPEED = 700;
+const DODGE_COOLDOWN = 1;
+const DODGE_IFRAMES = 0.14;
 const GRAPPLE_RANGE = 440;
 const MAX_HP = 5;
 
@@ -46,6 +55,7 @@ export interface PlayerCmd {
   net: boolean;
   sword: boolean;
   jump: boolean;
+  dash: boolean;
   gadget: boolean;
   gadgetHeld: boolean;
   cycle: number;
@@ -94,6 +104,11 @@ export class Player {
   private swordFired = false;
   private dashTimer = 0;
   private dashDir: Vec2 = { x: 1, y: 0 };
+  /** La ruee en cours vient-elle du gadget (franchit les gouffres) ? */
+  private dashPower = false;
+  private dashDur = DASH_TIME;
+  /** Recharge de la ruee de base, lue par le HUD. */
+  dodgeCd = 0;
   private knock = 0;
   private kx = 0;
   private ky = 0;
@@ -122,8 +137,8 @@ export class Player {
   get caps(): MoveCaps {
     return {
       // En l'air, on survole gouffres et rebords : c'est ce qui permet de
-      // sauter d'une structure a l'autre.
-      gap: this.dashing || this.gliding || this.jumping,
+      // sauter d'une structure a l'autre. La ruee de base, elle, reste au sol.
+      gap: (this.dashing && this.dashPower) || this.gliding || this.jumping,
       water: false,
       ledge: this.onLedge || this.jumping,
     };
@@ -241,11 +256,13 @@ export class Player {
       w.fx.dust(this.x, this.y + 4, 'rgba(255,255,255,0.65)', 5);
     }
 
-    // --- Dash ---------------------------------------------------------------
+    // --- Ruee ---------------------------------------------------------------
+    this.dodgeCd = Math.max(0, this.dodgeCd - dt);
     if (this.dashTimer > 0) {
       this.dashTimer -= dt;
       this.dashing = this.dashTimer > 0;
-      const sp = DASH_SPEED * (0.4 + clamp01(this.dashTimer / DASH_TIME) * 0.9);
+      const base = this.dashPower ? DASH_SPEED : DODGE_SPEED;
+      const sp = base * (0.4 + clamp01(this.dashTimer / this.dashDur) * 0.9);
       w.nav.moveAndSlide(this, this.dashDir.x * sp * dt, this.dashDir.y * sp * dt, this.caps);
       this.move = 1;
       this.state = 'dash';
@@ -255,6 +272,15 @@ export class Player {
       return;
     }
     this.dashing = false;
+
+    // Ruee de base : esquive au sol, toujours disponible
+    if (cmd.dash && this.dodgeCd <= 0 && this.netTimer <= 0) {
+      this.startDash(w, cmd, false);
+      this.dodgeCd = DODGE_COOLDOWN;
+      this.invuln = Math.max(this.invuln, DODGE_IFRAMES);
+      this.updateTrail(dt);
+      return;
+    }
 
     // --- Deplacement --------------------------------------------------------
     const speed = (this.skating ? SPEED_SKATE : SPEED) * (this.gliding ? 0.86 : 1);
@@ -358,6 +384,27 @@ export class Player {
     this.updateTrail(dt);
   }
 
+  /**
+   * Lance une ruee. `power` distingue le Dash-griffes (long, franchit les
+   * gouffres) de l'esquive de base. La direction suit le stick, sinon le
+   * regard : on esquive dans la direction ou l'on va, pas ou l'on vise.
+   */
+  private startDash(w: IWorld, cmd: PlayerCmd, power: boolean) {
+    this.dashDur = power ? DASH_TIME : DODGE_TIME;
+    this.dashTimer = this.dashDur;
+    this.dashPower = power;
+    this.dashing = true;
+    this.dashDir = { x: Math.cos(this.dir), y: Math.sin(this.dir) };
+    const l = Math.hypot(cmd.moveX, cmd.moveY);
+    if (l > 0.1) {
+      this.dashDir = { x: cmd.moveX / l, y: cmd.moveY / l };
+      this.dir = Math.atan2(this.dashDir.y, this.dashDir.x);
+    }
+    this.state = 'dash';
+    w.sfx('dash');
+    w.fx.dust(this.x, this.y, power ? '#ffd166' : 'rgba(255,255,255,0.8)', power ? 8 : 5);
+  }
+
   private updateTrail(dt: number) {
     for (let i = this.trail.length - 1; i >= 0; i--) {
       this.trail[i].life -= dt;
@@ -441,6 +488,12 @@ export class Player {
       this.netFired = false;
       this.action = 0;
       w.sfx('net');
+      // Le lancer est telegraphie : les souris entrainees ont le temps de
+      // faire un pas de cote avant que le filet ne se referme.
+      for (const m of w.mice) {
+        if (m.captured) continue;
+        m.onNetIncoming(this.netPoint.x, this.netPoint.y, NET_RADIUS, w);
+      }
     }
   }
 
@@ -516,6 +569,14 @@ export class Player {
       w.sfx('hitmob');
       hit = true;
     }
+    // Desamorcage : un coup d'epee nettoie mines, bombes et missiles devant soi
+    const hx = this.x + Math.cos(hitAngle) * SWORD_RANGE * 0.55;
+    const hy = this.y + Math.sin(hitAngle) * SWORD_RANGE * 0.55;
+    if (w.clearHazards(hx, hy, SWORD_RANGE * 0.6)) {
+      hit = true;
+      w.fx.floatingText(hx, hy - 20, 'Désamorcé !', '#ffd166');
+    }
+
     // Debusquage des cachettes
     const bx = this.x + Math.cos(hitAngle) * SWORD_RANGE * 0.6;
     const by = this.y + Math.sin(hitAngle) * SWORD_RANGE * 0.6;
@@ -537,17 +598,9 @@ export class Player {
         break;
       }
       case 'dash': {
-        this.dashTimer = DASH_TIME;
-        this.dashDir = { x: Math.cos(this.dir), y: Math.sin(this.dir) };
-        if (cmd.moveX || cmd.moveY) {
-          const l = Math.hypot(cmd.moveX, cmd.moveY);
-          this.dashDir = { x: cmd.moveX / l, y: cmd.moveY / l };
-          this.dir = Math.atan2(this.dashDir.y, this.dashDir.x);
-        }
+        this.startDash(w, cmd, true);
         this.invuln = Math.max(this.invuln, DASH_TIME + 0.12);
         this.cooldowns.dash = 0.95;
-        w.sfx('dash');
-        w.fx.dust(this.x, this.y, '#ffd166', 8);
         break;
       }
       case 'grapple': {

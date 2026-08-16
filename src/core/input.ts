@@ -8,7 +8,7 @@ import { clamp, TAU, type Vec2 } from './math';
 
 export type ActionId =
   | 'up' | 'down' | 'left' | 'right'
-  | 'net' | 'sword' | 'interact' | 'jump'
+  | 'net' | 'sword' | 'interact' | 'jump' | 'dash'
   | 'gadgetNext' | 'gadgetPrev' | 'gadgetUse'
   | 'pause' | 'confirm' | 'cancel' | 'map';
 
@@ -21,6 +21,7 @@ export const ACTION_LABELS: Record<ActionId, { fr: string; en: string }> = {
   sword: { fr: 'Épée', en: 'Sword' },
   interact: { fr: 'Interagir', en: 'Interact' },
   jump: { fr: 'Saut', en: 'Jump' },
+  dash: { fr: 'Ruée', en: 'Dash' },
   gadgetNext: { fr: 'Gadget suivant', en: 'Next gadget' },
   gadgetPrev: { fr: 'Gadget précédent', en: 'Prev gadget' },
   gadgetUse: { fr: 'Utiliser gadget', en: 'Use gadget' },
@@ -33,7 +34,7 @@ export const ACTION_LABELS: Record<ActionId, { fr: string; en: string }> = {
 /** Actions remappables proposees dans l'ecran d'options. */
 export const REMAPPABLE: ActionId[] = [
   'up', 'down', 'left', 'right',
-  'net', 'sword', 'jump', 'gadgetUse', 'interact',
+  'net', 'sword', 'jump', 'dash', 'gadgetUse', 'interact',
   'gadgetNext', 'gadgetPrev', 'pause',
 ];
 
@@ -54,8 +55,9 @@ export function defaultKeyBindings(): KeyBindings {
     net: ['Mouse0'],
     sword: ['Mouse2', 'KeyR'],
     jump: ['Space'],
+    dash: ['ShiftLeft', 'ShiftRight'],
     interact: ['KeyE'],
-    gadgetUse: ['ShiftLeft', 'KeyF'],
+    gadgetUse: ['KeyF'],
     gadgetNext: ['KeyX', 'WheelDown'],
     gadgetPrev: ['KeyC', 'WheelUp'],
     pause: ['Escape'],
@@ -75,6 +77,7 @@ export function defaultPadBindings(): PadBindings {
     net: [7], // RT / R2
     sword: [5, 3], // RB / R1, Y(triangle)
     jump: [0], // A / croix
+    dash: [1], // B / rond
     interact: [2], // X / carre
     gadgetUse: [6], // LT / L2
     gadgetNext: [4], // LB / L1
@@ -112,7 +115,7 @@ export interface TapEvent {
 }
 
 const ALL_ACTIONS: ActionId[] = [
-  'up', 'down', 'left', 'right', 'net', 'sword', 'jump', 'interact',
+  'up', 'down', 'left', 'right', 'net', 'sword', 'jump', 'dash', 'interact',
   'gadgetNext', 'gadgetPrev', 'gadgetUse', 'pause', 'confirm', 'cancel', 'map',
 ];
 

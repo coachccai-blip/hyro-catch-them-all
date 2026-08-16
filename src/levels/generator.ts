@@ -116,6 +116,8 @@ export interface GeneratedLevel {
   anchors: Vec2[];
   /** Cachettes utilisables par les souris. */
   hideSpots: Vec2[];
+  /** Trous de souris relies deux a deux : Hyro ne peut pas les emprunter. */
+  holes: { x: number; y: number; link: number; blocked: boolean }[];
   seed: number;
 }
 
@@ -328,10 +330,18 @@ export function generateLevel(def: LevelDef): GeneratedLevel {
   const mice = placeMice(grid, cols, rows, rooms, lockedRooms, rng, def, hideSpots, reachable, spawn);
   const mobs = placeMobs(grid, cols, rows, rooms, rng, def, barriers, reachable);
 
+  const holes = placeHoles(grid, cols, rows, rooms, rng, reachable);
+  for (const h of holes) {
+    props.push({
+      kind: 'mouseHole', x: h.x, y: h.y, s: 1, rot: 0, seed: rng.int(0, 999),
+      blocking: false, r: 0, hide: false, layer: 'flat', anim: false,
+    });
+  }
+
   return {
     def, cols, rows, w: cols * CELL, h: rows * CELL,
     grid, rooms, props, decals, lights, barriers, mice, mobs, spawn,
-    anchors, hideSpots, seed: def.seed,
+    anchors, hideSpots, holes, seed: def.seed,
   };
 }
 
@@ -1020,6 +1030,45 @@ function randomPerch(
   if (!spots.length) return null;
   const pick = spots[rng.int(0, spots.length - 1)];
   return { x: ((pick % cols) + 0.5) * CELL, y: (Math.floor(pick / cols) + 0.5) * CELL };
+}
+
+/**
+ * Trous de souris : de petites galeries reliees deux a deux, le long des murs.
+ * Une souris traquee peut s'y engouffrer et ressortir a l'autre bout de la
+ * carte — Hyro, lui, ne passe pas. C'est la principale source de tension d'une
+ * poursuite : il faut couper la route, pas courir derriere.
+ */
+function placeHoles(
+  grid: Uint8Array, cols: number, rows: number, rooms: RoomRect[], rng: Rng, reach: Uint8Array,
+): { x: number; y: number; link: number; blocked: boolean }[] {
+  const idx = (cx: number, cy: number) => cy * cols + cx;
+  const spots: Vec2[] = [];
+  for (let cy = 2; cy < rows - 2; cy++) {
+    for (let cx = 2; cx < cols - 2; cx++) {
+      const i = idx(cx, cy);
+      if (!reach[i] || !isWalkable(grid[i])) continue;
+      // Contre un mur : un trou au milieu d'une pelouse serait illisible
+      let wall = false;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        const t = grid[idx(cx + dx, cy + dy)];
+        if (t === TERR.WALL || t === TERR.VOID) wall = true;
+      }
+      if (!wall) continue;
+      const p = { x: (cx + 0.5) * CELL, y: (cy + 0.5) * CELL };
+      if (spots.some((q) => Math.hypot(q.x - p.x, q.y - p.y) < CELL * 7)) continue;
+      spots.push(p);
+    }
+  }
+  rng.shuffle(spots);
+  const count = Math.min(spots.length - (spots.length % 2), 10);
+  const holes = spots.slice(0, count).map((p) => ({ x: p.x, y: p.y, link: 0, blocked: false }));
+  // Appariement : chaque trou debouche sur son voisin de paire
+  for (let i = 0; i < holes.length; i += 2) {
+    if (i + 1 >= holes.length) break;
+    holes[i].link = i + 1;
+    holes[i + 1].link = i;
+  }
+  return holes;
 }
 
 function placeMice(

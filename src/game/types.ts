@@ -38,6 +38,14 @@ export interface IWorld {
   gluePools: { x: number; y: number; r: number; life: number }[];
   onMouseCaptured(m: IMouse): void;
   slowmo(duration: number): void;
+  /** Trous de souris : passages reserves aux souris. */
+  holes: { x: number; y: number; link: number; blocked: boolean }[];
+  /** Armement des souris. */
+  spawnMine(x: number, y: number): void;
+  throwBomb(x: number, y: number, tx: number, ty: number): void;
+  fireMissile(x: number, y: number, angle: number): void;
+  /** Desamorce les pieges dans un rayon (epee, boomerang). */
+  clearHazards(x: number, y: number, radius: number): number;
   /** Effets declenches par les gadgets. */
   grappleLine(x0: number, y0: number, x1: number, y1: number): void;
   spawnGlue(x: number, y: number): void;
@@ -78,6 +86,8 @@ export interface IMouse {
   alert(from: Vec2): void;
   capture(): void;
   applyStun(seconds: number): void;
+  /** Le filet arrive : chance d'esquive pour les souris entrainees. */
+  onNetIncoming(x: number, y: number, r: number, w: IWorld): void;
 }
 
 export interface IMob {

@@ -19,6 +19,8 @@ import { MouseEnt } from './mice';
 import { MobEnt, Projectile } from './mobs';
 import { Nerat, type BossWorld } from './boss';
 import { gadgetDef } from './gadgets';
+import { Hazard } from './hazards';
+import { drawMouseIcon } from '../render/characters';
 import type { IMouse, IWorld } from './types';
 
 interface GluePool {
@@ -116,6 +118,23 @@ class Boomerang {
   }
 }
 
+/**
+ * Cinematique de capture : le temps s'arrete, la camera plonge sur la souris
+ * et l'ecran explose. Volontairement courte (0,9 s) pour ne pas hacher le
+ * rythme, et interruptible par n'importe quel bouton d'action.
+ */
+export interface CaptureCine {
+  x: number;
+  y: number;
+  color: string;
+  kind: MouseKind;
+  t: number;
+  dur: number;
+  /** Derniere souris du quota : version longue, puis victoire. */
+  final: boolean;
+  index: number;
+}
+
 export type WorldEvent =
   | { type: 'win'; caught: number; total: number; time: number; damage: number; white: boolean }
   | { type: 'lose' }
@@ -134,6 +153,10 @@ export class World implements IWorld, BossWorld {
   boomerangs: Boomerang[] = [];
   gluePools: GluePool[] = [];
   fondues: Fondue[] = [];
+  /** Mines, bombes et missiles poses par les souris armees. */
+  hazards: Hazard[] = [];
+  /** Trous de souris : raccourcis interdits a Hyro. */
+  holes: { x: number; y: number; link: number; blocked: boolean }[] = [];
   boss: Nerat | null = null;
   lurePoint: Vec2 | null = null;
   lureLife = 0;
@@ -153,7 +176,8 @@ export class World implements IWorld, BossWorld {
   damageTaken = 0;
   finished = false;
   failed = false;
-  exitReady = false;
+  /** Cinematique de capture (zoom facon Ape Escape). */
+  cine: CaptureCine | null = null;
   /** Message contextuel affiche en bas de l'ecran. */
   toast = '';
   toastTimer = 0;
@@ -178,6 +202,7 @@ export class World implements IWorld, BossWorld {
     this.screenShakeScale = shakeScale;
     this.arenaCenter = { x: this.level.w / 2, y: this.level.h / 2 };
 
+    this.holes = this.level.holes;
     for (const s of this.level.mice) this.mice.push(new MouseEnt(s));
     for (const s of this.level.mobs) {
       this.mobs.push(new MobEnt(s.kind, s.x, s.y, s.guardBarrier === -2, s.guardBarrier));
@@ -268,6 +293,46 @@ export class World implements IWorld, BossWorld {
     this.boomerangs.push(new Boomerang(x, y, angle));
   }
 
+  // --- Armement des souris --------------------------------------------------
+  // Plafond volontaire : au-dela le niveau devient illisible, et une arene
+  // saturee de mines punit la patience au lieu de recompenser la lecture.
+  private readonly maxHazards = 26;
+
+  spawnMine(x: number, y: number) {
+    if (this.hazards.length >= this.maxHazards) return;
+    this.hazards.push(new Hazard('mine', x, y));
+    this.fx.dust(x, y, 'rgba(180,180,200,0.8)', 3);
+  }
+
+  throwBomb(x: number, y: number, tx: number, ty: number) {
+    if (this.hazards.length >= this.maxHazards) return;
+    const h = new Hazard('bomb', x, y);
+    h.throwTo(tx, ty);
+    this.hazards.push(h);
+    this.sfx('boomerang');
+  }
+
+  fireMissile(x: number, y: number, angle: number) {
+    if (this.hazards.length >= this.maxHazards) return;
+    const h = new Hazard('missile', x, y);
+    h.launch(angle);
+    this.hazards.push(h);
+    this.sfx('dash');
+    this.fx.burstHit(x, y, '#ff9b3a');
+  }
+
+  /** L'epee et le boomerang desamorcent les pieges. Renvoie le nombre detruit. */
+  clearHazards(x: number, y: number, radius: number): number {
+    let n = 0;
+    for (const h of this.hazards) {
+      if (h.dead) continue;
+      if (dist(h.x, h.y, x, y) > radius + h.r) continue;
+      h.destroy(this);
+      n++;
+    }
+    return n;
+  }
+
   summonMouse(kind: MouseKind, x: number, y: number) {
     const m = new MouseEnt({ id: `sum-${this.mice.length}`, kind, x, y, locked: false });
     this.mice.push(m);
@@ -290,15 +355,46 @@ export class World implements IWorld, BossWorld {
     this.caught.push(m.id);
     this.fx.burstCapture(m.x, m.y, (m as MouseEnt).color);
     this.sfx('capture', this.caught.length % 4);
-    this.showToast(`${this.caught.length} / ${this.quota}`);
-    if (this.caught.length === this.quota) {
-      this.slowmo(0.65);
-      this.exitReady = true;
-      this.sfx('unlock');
-      this.showToast('Objectif atteint ! Retourne au panier.', 4);
-    }
     // Les souris proches paniquent
     this.alertNearby(m.x, m.y, 260);
+
+    const final = this.caught.length >= this.quota;
+    this.cine = {
+      x: m.x,
+      y: m.y,
+      color: (m as MouseEnt).color,
+      kind: m.kind,
+      t: 0,
+      dur: final ? 1.9 : 0.9,
+      final,
+      index: this.caught.length,
+    };
+    this.shake(final ? 10 : 5);
+    if (final) this.sfx('unlock');
+  }
+
+  /** Un bouton d'action pendant la cinematique : on coupe court. */
+  private skipCine() {
+    const c = this.cine;
+    if (!c || c.t < 0.22) return;
+    c.t = Math.max(c.t, c.dur - 0.18);
+  }
+
+  private updateCine(dt: number) {
+    const c = this.cine;
+    if (!c) return;
+    c.t += dt;
+    // Gerbe d'etincelles au moment de l'impact
+    if (c.t < 0.3) {
+      const a = Math.random() * TAU;
+      const sp = 200 + Math.random() * 320;
+      this.fx.spawn('spark', c.x, c.y - 10, Math.cos(a) * sp, Math.sin(a) * sp, 0.4, 5, c.color);
+    }
+    if (c.t >= c.dur) {
+      this.cine = null;
+      if (c.final) this.finish();
+      else this.showToast(`${c.index} / ${this.quota}`, 1.4);
+    }
   }
 
   showToast(text: string, time = 1.8) {
@@ -391,9 +487,6 @@ export class World implements IWorld, BossWorld {
         return;
       }
     }
-    if (this.exitReady && dist(p.x, p.y, this.level.spawn.x, this.level.spawn.y) < 90) {
-      this.finish();
-    }
   }
 
   finish() {
@@ -414,6 +507,20 @@ export class World implements IWorld, BossWorld {
   // --- Boucle ---------------------------------------------------------------
 
   update(dt: number, cmd: PlayerCmd, interactPressed: boolean) {
+    // --- Cinematique de capture : le monde se fige, seuls la camera, les
+    // particules et l'animation de la cinematique continuent.
+    if (this.cine) {
+      if (interactPressed || cmd.net || cmd.jump || cmd.sword) this.skipCine();
+      this.time += dt * 0.25;
+      this.shakePower = damp(this.shakePower, 0, 7, dt);
+      this.toastTimer -= dt;
+      this.updateCine(dt);
+      this.fx.update(dt * 0.35);
+      this.renderer.update(dt * 0.3, this.camera);
+      this.updateCamera(dt);
+      return;
+    }
+
     // Ralenti scenaristique (derniere souris du quota, phase de boss)
     if (this.slowmoTimer > 0) {
       this.slowmoTimer -= dt;
@@ -463,6 +570,12 @@ export class World implements IWorld, BossWorld {
     for (const b of this.boomerangs) b.update(sdt, this);
     this.boomerangs = this.boomerangs.filter((b) => !b.dead);
 
+    // Pieges des souris. Le boomerang balaie tout sur son passage : c'est sa
+    // vraie utilite offensive une fois les interrupteurs actionnes.
+    for (const h of this.hazards) h.update(sdt, this);
+    for (const b of this.boomerangs) this.clearHazards(b.x, b.y, 26);
+    this.hazards = this.hazards.filter((h) => !h.dead);
+
     // Glue
     for (let i = this.gluePools.length - 1; i >= 0; i--) {
       const g = this.gluePools[i];
@@ -475,6 +588,12 @@ export class World implements IWorld, BossWorld {
         if (!m.captured && dist(m.x, m.y, g.x, g.y) < g.r) m.applyGlue(1.2);
       }
       if (this.boss && dist(this.boss.x, this.boss.y, g.x, g.y) < g.r + 40) this.boss.applyGlue(1.4);
+    }
+
+    // Une flaque de glue bouche un trou : c'est la reponse du joueur aux
+    // souris qui prennent leurs raccourcis.
+    for (const h of this.holes) {
+      h.blocked = this.gluePools.some((g) => dist(h.x, h.y, g.x, g.y) < g.r * 0.9);
     }
 
     // Leurre
@@ -530,31 +649,48 @@ export class World implements IWorld, BossWorld {
     this.renderer.update(dt, this.camera);
     this.fx.update(sdt);
     this.updateCamera(dt);
+  }
 
-    if (!this.finished && !this.failed && this.exitReady
-      && dist(this.player.x, this.player.y, this.level.spawn.x, this.level.spawn.y) < 70) {
-      this.showToast('Appuie sur E / A pour terminer', 0.6);
-    }
+  /** Progression 0..1 du plongee de camera pendant la cinematique. */
+  private cinePush(): number {
+    const c = this.cine;
+    if (!c) return 0;
+    // Montee seche (0,16 s), palier, puis retour souple.
+    const inK = clamp01(c.t / 0.16);
+    const outK = clamp01((c.dur - c.t) / 0.3);
+    return Math.min(inK * inK * (3 - 2 * inK), outK * outK * (3 - 2 * outK));
   }
 
   private updateCamera(dt: number) {
     const c = this.camera;
-    const targetX = clamp(this.player.x - c.w / 2, 0, Math.max(0, this.level.w - c.w));
-    const targetY = clamp(this.player.y - c.h / 2, 0, Math.max(0, this.level.h - c.h));
-    c.x = damp(c.x, targetX, 7, dt);
-    c.y = damp(c.y, targetY, 7, dt);
+    // Zoom cinematique : la camera plonge sur la souris attrapee.
+    const push = this.cinePush();
+    const zoom = this.baseZoom * (1 + push * (this.cine?.final ? 1.25 : 0.85));
+    c.zoom = zoom;
+    c.w = c.sw / zoom;
+    c.h = c.sh / zoom;
+
+    const fx = this.cine ? this.cine.x : this.player.x;
+    const fy = this.cine ? this.cine.y : this.player.y;
+    const targetX = clamp(fx - c.w / 2, 0, Math.max(0, this.level.w - c.w));
+    const targetY = clamp(fy - c.h / 2, 0, Math.max(0, this.level.h - c.h));
+    const rate = this.cine ? 16 : 7;
+    c.x = damp(c.x, targetX, rate, dt);
+    c.y = damp(c.y, targetY, rate, dt);
     if (this.level.w < c.w) c.x = (this.level.w - c.w) / 2;
     if (this.level.h < c.h) c.y = (this.level.h - c.h) / 2;
   }
 
+  private baseZoom = 1;
+
   resize(w: number, h: number) {
     // Zoom : Hyro doit rester bien lisible sans perdre la vision d'ensemble.
-    const zoom = clamp(w / 950, 1.05, 1.6);
+    this.baseZoom = clamp(w / 950, 1.05, 1.6);
     this.camera.sw = w;
     this.camera.sh = h;
-    this.camera.zoom = zoom;
-    this.camera.w = w / zoom;
-    this.camera.h = h / zoom;
+    this.camera.zoom = this.baseZoom;
+    this.camera.w = w / this.baseZoom;
+    this.camera.h = h / this.baseZoom;
   }
 
   // --- Rendu ----------------------------------------------------------------
@@ -586,7 +722,7 @@ export class World implements IWorld, BossWorld {
     this.prof.ground = T() - t0;
     t0 = T();
 
-    if (!this.finished && !this.failed) {
+    if (!this.finished && !this.failed && !this.cine) {
       this.player.drawReticle(ctx, this.lastAimX, this.lastAimY, this.time);
     }
 
@@ -610,6 +746,130 @@ export class World implements IWorld, BossWorld {
 
     // Le radar dessine par-dessus l'ambiance pour rester lisible
     if (this.radarActive) this.drawRadar(ctx);
+
+    if (this.cine) this.drawCine(ctx);
+  }
+
+  /**
+   * Fanfare de capture : lignes de vitesse, ondes de choc, souris brandie et
+   * banniere. Tout est en coordonnees ecran pour rester net quel que soit le
+   * zoom de la camera.
+   */
+  private drawCine(ctx: Ctx) {
+    const c = this.cine!;
+    const cam = this.camera;
+    const k = clamp01(c.t / c.dur);
+    const push = this.cinePush();
+    // Point d'impact a l'ecran
+    const sx = (c.x - cam.x) * cam.zoom;
+    const sy = (c.y - cam.y) * cam.zoom;
+    const R = Math.hypot(cam.sw, cam.sh);
+
+    ctx.save();
+
+    // 1) Assombrissement en iris centre sur la prise
+    const iris = ctx.createRadialGradient(sx, sy, R * 0.06, sx, sy, R * 0.62);
+    iris.addColorStop(0, 'rgba(0,0,0,0)');
+    iris.addColorStop(1, rgba('#120a1c', 0.72 * push));
+    ctx.fillStyle = iris;
+    ctx.fillRect(0, 0, cam.sw, cam.sh);
+
+    // 2) Lignes de vitesse convergentes (le trait de la BD)
+    const lines = 30;
+    ctx.globalAlpha = 0.5 * push;
+    for (let i = 0; i < lines; i++) {
+      const a = (i / lines) * TAU + c.t * 0.6 + (i % 2) * 0.05;
+      const r0 = R * (0.18 + ((i * 7919) % 100) / 700);
+      const wdt = 0.012 + ((i * 104729) % 100) / 5200;
+      poly(ctx, [
+        sx + Math.cos(a) * r0, sy + Math.sin(a) * r0,
+        sx + Math.cos(a - wdt) * R, sy + Math.sin(a - wdt) * R,
+        sx + Math.cos(a + wdt) * R, sy + Math.sin(a + wdt) * R,
+      ]);
+      ctx.fillStyle = i % 3 === 0 ? rgba(c.color, 0.5) : 'rgba(255,255,255,0.35)';
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // 3) Ondes de choc successives
+    for (let i = 0; i < 3; i++) {
+      const rt = clamp01((c.t - i * 0.09) / 0.5);
+      if (rt <= 0 || rt >= 1) continue;
+      ctx.globalAlpha = (1 - rt) * 0.75;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 30 + rt * R * 0.42, 0, TAU);
+      ctx.strokeStyle = i === 1 ? c.color : '#fff6e2';
+      ctx.lineWidth = 9 * (1 - rt) + 2;
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // 4) Flash blanc a l'impact
+    if (c.t < 0.14) {
+      ctx.fillStyle = `rgba(255,255,255,${(1 - c.t / 0.14) * 0.7})`;
+      ctx.fillRect(0, 0, cam.sw, cam.sh);
+    }
+
+    // 5) La souris brandie : elle jaillit, tremble, puis retombe.
+    // Position bornee dans la moitie basse : la banniere occupe le haut, les
+    // deux ne doivent jamais se marcher dessus.
+    const pop = c.t < 0.22 ? Math.pow(clamp01(c.t / 0.22), 0.45) * 1.18 : 1 + Math.sin((c.t - 0.22) * 9) * 0.05;
+    const iconR = Math.min(cam.sw, cam.sh) * 0.12 * pop * push;
+    const ix = clamp(sx, iconR * 1.8, cam.sw - iconR * 1.8);
+    const iy = clamp(sy - 60 * push, cam.sh * 0.46, cam.sh * 0.76);
+    if (iconR > 2) {
+      ctx.save();
+      ctx.translate(ix, iy);
+      ctx.rotate(Math.sin(c.t * 11) * 0.16);
+      // Etoile tournante en fond
+      star(ctx, 0, 0, iconR * 2.5, 0.42, 12, c.t * 1.4);
+      ctx.fillStyle = rgba(c.color, 0.3);
+      ctx.fill();
+      glow(ctx, 0, 0, iconR * 3, c.color, 0.5);
+      // Filet : quelques mailles par-dessus la prise
+      drawMouseIcon(ctx, 0, 0, iconR, c.kind);
+      ctx.globalAlpha = 0.75;
+      ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+      ctx.lineWidth = Math.max(1.5, iconR * 0.05);
+      for (let i = -3; i <= 3; i++) {
+        ctx.beginPath();
+        ctx.moveTo(i * iconR * 0.42, -iconR * 1.2);
+        ctx.lineTo(i * iconR * 0.42 + iconR * 0.5, iconR * 1.2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(-iconR * 1.3, i * iconR * 0.42);
+        ctx.lineTo(iconR * 1.3, i * iconR * 0.42 + iconR * 0.3);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // 6) Banniere + compteur
+    const bt = clamp01((c.t - 0.1) / 0.18);
+    const bs = bt < 1 ? 1.8 - 0.8 * (bt * bt * (3 - 2 * bt)) : 1 + Math.sin(c.t * 7) * 0.02;
+    const fade = clamp01((c.dur - c.t) / 0.25);
+    ctx.globalAlpha = fade;
+    const by = Math.max(96, cam.sh * 0.17);
+    // Bandeau sombre : le texte doit rester lisible sur n'importe quel decor
+    ctx.save();
+    ctx.globalAlpha = fade * 0.62 * push;
+    ctx.fillStyle = '#150c22';
+    ctx.fillRect(0, by - 46, cam.sw, c.final ? 130 : 96);
+    ctx.restore();
+    ctx.save();
+    ctx.translate(cam.sw / 2, by);
+    ctx.scale(bs, bs);
+    const label = c.final ? 'OBJECTIF ATTEINT !' : 'ATTRAPÉE !';
+    outlinedText(ctx, label, 0, 0, 46, c.final ? '#8cf0a0' : '#ffe066', '#231436', 9);
+    ctx.restore();
+    outlinedText(ctx, `${c.index} / ${this.quota}`, cam.sw / 2, by + 44, 32, '#fff6e2', '#231436', 7);
+    if (c.final) {
+      outlinedText(ctx, 'Victoire !', cam.sw / 2, by + 78, 24, '#ffd166', '#231436', 6);
+    } else if (k > 0.45) {
+      ctx.globalAlpha = fade * 0.7;
+      outlinedText(ctx, 'Appuie pour continuer', cam.sw / 2, cam.sh - 46, 18, '#d9cfe8', '#231436', 5);
+    }
+    ctx.restore();
   }
 
   lastAimX = 0;
@@ -680,12 +940,19 @@ export class World implements IWorld, BossWorld {
       }
       ctx.restore();
     }
-    // Zone de sortie
-    if (this.exitReady) {
-      const s = this.level.spawn;
-      const pulse = 0.5 + 0.5 * Math.sin(this.time * 3);
-      glow(ctx, s.x, s.y, 120 + pulse * 30, '#ffe066', 0.35);
-      dashedCircle(ctx, s.x, s.y, 66, 14, this.time * 60, 'rgba(255,224,102,0.8)', 4);
+    // Trous bouches a la glue : le raccourci est condamne
+    for (const h of this.holes) {
+      if (!h.blocked) continue;
+      ctx.save();
+      ctx.globalAlpha = 0.9;
+      ctx.beginPath();
+      ctx.ellipse(h.x, h.y, 16, 10, 0, 0, TAU);
+      ctx.fillStyle = '#8cf0a0';
+      ctx.fill();
+      ctx.strokeStyle = '#3f8f62';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+      ctx.restore();
     }
   }
 
@@ -712,6 +979,7 @@ export class World implements IWorld, BossWorld {
     }
     for (const pr of this.projectiles) buf.push({ y: pr.y, kind: 3, ref: pr });
     for (const bm of this.boomerangs) buf.push({ y: bm.y, kind: 4, ref: bm });
+    for (const hz of this.hazards) buf.push({ y: hz.y, kind: 7, ref: hz });
     if (this.boss && !this.boss.dead) buf.push({ y: this.boss.y, kind: 5, ref: this.boss });
     buf.push({ y: this.player.y, kind: 6, ref: this.player });
 
@@ -725,6 +993,7 @@ export class World implements IWorld, BossWorld {
         case 3: (item.ref as Projectile).draw(ctx); break;
         case 4: (item.ref as Boomerang).draw(ctx); break;
         case 5: (item.ref as Nerat).draw(ctx); break;
+        case 7: (item.ref as Hazard).draw(ctx, this.time); break;
         default: this.player.draw(ctx); break;
       }
     }
@@ -919,13 +1188,13 @@ export class World implements IWorld, BossWorld {
       maxHp: this.player.maxHp,
       caught: this.caught.length,
       quota: this.quota,
+      dodgeCd: this.player.dodgeCd,
       total: this.totalMice,
       gadgets: this.player.gadgets,
       selected: this.player.selected,
       cooldowns: this.player.cooldowns,
       radar: this.radarActive,
       skating: this.player.skating,
-      exitReady: this.exitReady,
       toast: this.toastTimer > 0 ? this.toast : '',
       caughtKinds: this.mice.filter((m) => m.captured).map((m) => m.kind),
       boss: this.boss ? { hp: this.boss.hp, max: this.boss.maxHp, phase: this.boss.phase, capturable: this.boss.capturable } : null,

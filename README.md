@@ -42,8 +42,9 @@ Astuce : `?level=3-2` dans l'URL lance directement un niveau
 | Viser | souris — le réticule colle exactement au curseur |
 | Filet | clic gauche (portée : **un chat**, l'anneau autour d'Hyro la montre) |
 | Saut | `Espace` |
+| Ruée / esquive | `Maj` (recharge 1 s) |
 | Épée | clic droit ou `R` |
-| Gadget | `Maj` ou `F` |
+| Gadget | `F` |
 | Changer de gadget | `X` / `C`, molette, ou `1`–`8` |
 | Interagir / terminer le niveau | `E` |
 | Pause | `Échap` |
@@ -51,14 +52,14 @@ Astuce : `?level=3-2` dans l'URL lance directement un niveau
 
 ### Manette (Gamepad API)
 Stick gauche : déplacement · Stick droit : visée · `RT` : filet · `A` : saut ·
-`RB`/`Y` : épée · `LT` : gadget · `LB` : gadget suivant · `X` : interagir ·
-`Start` : pause.
+`B` : ruée · `RB`/`Y` : épée · `LT` : gadget · `LB` : gadget suivant ·
+`X` : interagir · `Start` : pause.
 Vibration légère sur capture et sur coup reçu si la manette la supporte.
 
 ### Tactile
 Joystick virtuel flottant à gauche, glissement à droite pour viser (relâcher
-lance le filet), plus des boutons larges : filet, épée, saut, gadget, cycle,
-`E`, pause.
+lance le filet), plus des boutons larges : filet, épée, saut, **ruée**, gadget,
+cycle, `E`, pause.
 
 Toutes les touches clavier et manette sont **reconfigurables** dans les options.
 
@@ -66,6 +67,11 @@ Toutes les touches clavier et manette sont **reconfigurables** dans les options.
 
 ## Contenu
 
+- **Objectif** : le niveau est gagné **dès la dernière souris du quota** —
+  aucun aller-retour vers le panier. Chaque capture déclenche une
+  **cinématique** : la caméra plonge sur la prise, l'écran part en lignes de
+  vitesse et la souris est brandie dans le filet (0,9 s, interruptible d'une
+  touche ; version longue et fanfare de victoire pour la dernière).
 - **Verticalité** : chaque monde comporte des structures surélevées (terrasses
   de jardin, toits d'étals, passerelles d'égout, toitures, caillebotis d'usine).
   Le saut permet d'y grimper et de franchir les petits trous ; **certaines
@@ -75,6 +81,31 @@ Toutes les touches clavier et manette sont **reconfigurables** dans les options.
 - **7 types de souris**, identifiables par la couleur du bandana **et** par un
   symbole distinct (daltonisme) : Trouillarde ▲, Flâneuse ●, Bagarreuse ✚,
   Sprinteuse ◆, Ingénieuse ★, Ombre ☾, Blanche ✦ (1 par niveau, très cachée).
+- **Souris armées** — chaque bandana a son armement, et tout est **télégraphié
+  et destructible** : une mine affiche son rayon de déclenchement, une bombe
+  montre sa mèche qui raccourcit, un missile laisse une traînée et vire
+  lentement. Un coup d'épée ou un passage de boomerang désamorce n'importe
+  lequel.
+
+| Bandana | Arme | Ruée | Trous | Esquive du filet |
+|---|---|---|---|---|
+| Trouillarde (bleu) | — | non | non | non |
+| Flâneuse (jaune) | — | non | **oui** | oui |
+| Bagarreuse (rouge) | bombes lancées en cloche | **oui** | non | oui |
+| Sprinteuse (vert) | chapelet de mines en fuite | **oui** | **oui** | oui |
+| Ingénieuse (violet) | missiles téléguidés | non | non | oui |
+| Ombre (noir) | mines | **oui** | **oui** | oui |
+| Blanche | missiles | **oui** | **oui** | oui |
+
+- **Ruée d'Hyro** — `Maj` / `B`, recharge **1 seconde**, quelques images
+  d'invincibilité. C'est la réponse aux mines, bombes et missiles. Elle ne
+  franchit **pas** les gouffres : le Dash-griffes garde tout son rôle de clé
+  de progression.
+- **Trous de souris** — dix passages par niveau, appariés deux à deux, que
+  seules les souris empruntent : elles y disparaissent et ressortent ailleurs
+  sur la carte. Un tir de **glue** en bouche un ; une souris qui vient de
+  ressortir ne peut pas replonger avant 7 s, pour qu'aucune ne devienne
+  inattrapable.
 - **5 mobs hostiles** : cafards blindés, corbeaux, rats de garde, drones à
   fromage, élites de Nerat. Un mini-boss au niveau 5 de chaque monde.
 - **8 gadgets** débloqués progressivement — chacun ouvre d'anciennes zones, ce
@@ -134,8 +165,9 @@ Volumes musique et effets réglables séparément, avec ducking sur les jingles.
 
 Automatique dans le `localStorage` : niveaux terminés, souris capturées par
 identifiant (suivi des Blanches), gadgets, médailles, options et remapping.
-Le schéma est **versionné** avec migration douce ; la réinitialisation demande
-une **double confirmation**.
+Le schéma est **versionné** avec migration douce (la v4 déplace `Maj` du
+gadget vers la ruée sans casser un remapping existant) ; la réinitialisation
+demande une **double confirmation**.
 
 ---
 

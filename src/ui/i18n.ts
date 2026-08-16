@@ -75,7 +75,6 @@ const DICT: Record<string, Entry> = {
   interactKey: ['Interagir', 'Interact'],
   cycleKey: ['Changer de gadget', 'Cycle gadget'],
   pauseKey: ['Pause', 'Pause'],
-  goalReached: ['Objectif atteint ! Retourne au panier.', 'Goal reached! Return to the basket.'],
   finishHere: ['Terminer', 'Finish'],
   creditsBody: [
     'HYRO — Attrapez-les tous !\n\nUn jeu original : code, décors, personnages et musique\nsont générés procéduralement, sans aucun asset externe.\n\nMoteur maison en TypeScript + Canvas 2D.\nAudio synthétisé avec la Web Audio API.\n\nMerci d\'avoir joué !',

@@ -6,7 +6,7 @@
 import { defaultKeyBindings, defaultPadBindings, type KeyBindings, type PadBindings } from '../core/input';
 
 export const SAVE_KEY = 'hyro.save';
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 export type Medal = 'none' | 'bronze' | 'silver' | 'gold';
 export type Lang = 'fr' | 'en';
@@ -103,6 +103,14 @@ function migrate(raw: Partial<SaveData> & { version?: number }): SaveData {
   // Les bindings peuvent manquer une action ajoutee par une mise a jour.
   out.settings.keys = { ...defaultKeyBindings(), ...(raw.settings?.keys ?? {}) };
   out.settings.pad = { ...defaultPadBindings(), ...(raw.settings?.pad ?? {}) };
+  // v4 : la ruee prend Maj, le gadget se replie sur F. Sans ce nettoyage, une
+  // vieille sauvegarde declencherait les deux sur la meme touche.
+  if ((raw.version ?? 0) < 4) {
+    out.settings.keys.gadgetUse = out.settings.keys.gadgetUse.filter((k) => !k.startsWith('Shift'));
+    if (!out.settings.keys.gadgetUse.length) out.settings.keys.gadgetUse = ['KeyF'];
+    out.settings.keys.dash = defaultKeyBindings().dash;
+    out.settings.pad.dash = defaultPadBindings().dash;
+  }
   for (const [id, p] of Object.entries(out.levels)) {
     out.levels[id] = { ...emptyProgress(), ...(p as LevelProgress) };
   }

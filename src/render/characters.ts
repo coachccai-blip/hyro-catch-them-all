@@ -310,6 +310,8 @@ export interface MouseView {
   glued: boolean;
   /** Souris perchee sur une structure : legere surelevation visuelle. */
   perched?: boolean;
+  /** Ruee en cours : trainee de vitesse. */
+  dashing?: boolean;
 }
 
 export function drawMouse(ctx: Ctx, v: MouseView) {
@@ -329,6 +331,17 @@ export function drawMouse(ctx: Ctx, v: MouseView) {
   groundShadow(ctx, v.x, v.y + 2, s * 1.1, s * 0.4, 0.26 * v.alpha);
   // Une souris perchee est dessinee un peu plus haut que son ombre.
   if (v.perched) ctx.translate(0, -10);
+  // Ruee : trainee de vitesse derriere elle
+  if (v.dashing) {
+    ctx.save();
+    ctx.globalAlpha = 0.45 * v.alpha;
+    for (let i = 1; i <= 3; i++) {
+      ellipse(ctx, v.x - fx * i * 9, v.y - s * 0.6 - fy * i * 9, s * 0.6, s * 0.5, 0);
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.fill();
+    }
+    ctx.restore();
+  }
 
   // Queue
   const tail = Math.sin(v.anim * (v.stunned ? 2 : 11)) * s * 0.5;

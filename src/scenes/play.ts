@@ -128,6 +128,7 @@ export class PlayScene extends Scene {
       net: input.pressed('net') || input.aimReleased,
       sword: input.pressed('sword'),
       jump: input.pressed('jump'),
+      dash: input.pressed('dash'),
       gadget: input.pressed('gadgetUse'),
       gadgetHeld: input.isDown('gadgetUse'),
       cycle: (input.pressed('gadgetNext') ? 1 : 0) - (input.pressed('gadgetPrev') ? 1 : 0) + Math.sign(input.wheel),
@@ -158,7 +159,7 @@ export class PlayScene extends Scene {
   private idleCmd(): PlayerCmd {
     return {
       moveX: 0, moveY: 0, aimX: this.world.player.x + 100, aimY: this.world.player.y,
-      net: false, sword: false, jump: false, gadget: false, gadgetHeld: false, cycle: 0, slot: null,
+      net: false, sword: false, jump: false, dash: false, gadget: false, gadgetHeld: false, cycle: 0, slot: null,
     };
   }
 

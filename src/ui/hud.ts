@@ -21,13 +21,14 @@ export interface HudState {
   maxHp: number;
   caught: number;
   quota: number;
+  /** Recharge de la ruee (secondes restantes). */
+  dodgeCd: number;
   total: number;
   gadgets: string[];
   selected: number;
   cooldowns: Record<string, number | undefined>;
   radar: boolean;
   skating: boolean;
-  exitReady: boolean;
   toast: string;
   caughtKinds: string[];
   boss: { hp: number; max: number; phase: number; capturable: boolean } | null;
@@ -63,6 +64,7 @@ export class Hud {
       { id: 'net', action: 'net', x: w - 150 * k, y: h - 150 * k, r: 76 * k, label: 'net' },
       { id: 'sword', action: 'sword', x: w - 300 * k, y: h - 122 * k, r: 56 * k, label: 'sword' },
       { id: 'jump', action: 'jump', x: w - 262 * k, y: h - 262 * k, r: 52 * k, label: 'jump' },
+      { id: 'dash', action: 'dash', x: w - 388 * k, y: h - 344 * k, r: 50 * k, label: 'dash' },
       { id: 'gadget', action: 'gadgetUse', x: w - 148 * k, y: h - 322 * k, r: 58 * k, label: 'gadget' },
       { id: 'cycle', action: 'gadgetNext', x: w - 106 * k, y: h - 452 * k, r: 40 * k, label: 'cycle' },
       { id: 'interact', action: 'interact', x: w - 382 * k, y: h - 218 * k, r: 40 * k, label: 'E' },
@@ -95,6 +97,7 @@ export class Hud {
         }
         case 'cycle': outlinedText(ctx, '⟳', b.x, b.y, s * 0.8, '#fff6e2'); break;
         case 'jump': outlinedText(ctx, '⤒', b.x, b.y, s * 0.85, '#fff6e2'); break;
+        case 'dash': outlinedText(ctx, '»', b.x, b.y, s * 0.9, '#9ad0ff'); break;
         case 'pause': outlinedText(ctx, '❚❚', b.x, b.y, s * 0.5, '#fff6e2'); break;
         default: outlinedText(ctx, b.label ?? '', b.x, b.y, s * 0.55, '#fff6e2'); break;
       }
@@ -143,6 +146,24 @@ export class Hud {
       const x = 56 + i * 52;
       const y = 54 + pop * 6;
       drawHeartIcon(ctx, x, y, 22 * (1 + pop * 0.25), i < s.hp);
+    }
+
+    // --- Jauge de ruee ------------------------------------------------------
+    // Une simple barre sous les coeurs : lisible d'un coup d'oeil en pleine
+    // esquive, sans jamais empieter sur l'action.
+    {
+      const ready = s.dodgeCd <= 0;
+      const k = ready ? 1 : 1 - s.dodgeCd;
+      const bw = 116;
+      const bx = 34;
+      const by = 84;
+      panel(ctx, bx, by, bw, 14, { fill: '#141a2e', stroke: '#3d4763', radius: 7, alpha: 0.7 });
+      ctx.save();
+      roundRect(ctx, bx + 2, by + 2, Math.max(2, (bw - 4) * k), 10, 5);
+      ctx.fillStyle = ready ? '#9ad0ff' : '#5a6b8c';
+      ctx.fill();
+      ctx.restore();
+      outlinedText(ctx, ready ? 'RUÉE' : '…', bx + bw + 26, by + 13, 14, ready ? '#9ad0ff' : '#7b86a3', '#141a2b', 3, 'center', 'normal');
     }
 
     // --- Compteur de souris -------------------------------------------------
@@ -236,11 +257,6 @@ export class Hud {
         fill: '#1a2038', stroke: '#ffd166', radius: 14, alpha: 0.85,
       });
       outlinedText(ctx, s.toast, view.w / 2, view.h - 167 * fs, 24 * fs, '#fff6e2', '#1a1226', 5);
-    }
-
-    // --- Rappel de sortie ---------------------------------------------------
-    if (s.exitReady) {
-      outlinedText(ctx, t('goalReached'), view.w / 2, 132, 22 * fs, '#8cf0a0', '#14261c', 5);
     }
 
     if (showFps) {

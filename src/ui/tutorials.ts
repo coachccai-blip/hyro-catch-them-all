@@ -30,9 +30,30 @@ export const TUTORIALS: Record<string, TutorialCard> = {
   quota: {
     title: 'Objectif',
     titleEn: 'Goal',
-    body: 'Capture le quota affiché en haut à droite, puis retourne au panier de départ pour terminer.',
-    bodyEn: 'Catch the quota shown top-right, then return to the starting basket to finish.',
+    body: 'Capture le quota affiché en haut à droite : le niveau se termine dès la dernière prise, inutile de revenir sur tes pas.',
+    bodyEn: 'Catch the quota shown top-right: the level ends on the final capture — no need to walk back.',
     icon: { kind: 'mouse', id: 'yellow' },
+  },
+  dodge: {
+    title: 'Ruée',
+    titleEn: 'Dash',
+    body: 'Maj (ou B à la manette) pour une ruée brève, rechargée en 1 seconde. Elle t\'offre quelques images d\'invincibilité : c\'est ta parade contre les mines, les bombes et les missiles.',
+    bodyEn: 'Shift (or B on a gamepad) for a short dash, back in 1 second. It grants a few invulnerability frames — your answer to mines, bombs and missiles.',
+    icon: { kind: 'sword', id: 'sword' },
+  },
+  holes: {
+    title: 'Trous de souris',
+    titleEn: 'Mouse holes',
+    body: 'Les souris se faufilent dans des trous que tu ne peux pas emprunter, et ressortent ailleurs. Un tir de glue en bouche un : c\'est la parade.',
+    bodyEn: 'Mice slip into holes you cannot use and pop out elsewhere. A glue shot plugs one — that is the counter.',
+    icon: { kind: 'mouse', id: 'yellow' },
+  },
+  traps: {
+    title: 'Souris armées',
+    titleEn: 'Armed mice',
+    body: 'Chaque bandana a son arme : bombes (rouge), mines (noire), chapelet de mines en fuite (verte), missiles téléguidés (violette, blanche). Tout est visible avant d\'exploser — et un coup d\'épée désamorce.',
+    bodyEn: 'Each bandana has its weapon: bombs (red), mines (black), a mine trail while fleeing (green), homing missiles (purple, white). Everything is telegraphed — and a sword swing defuses it.',
+    icon: { kind: 'mouse', id: 'red' },
   },
   jump: {
     title: 'Saut',

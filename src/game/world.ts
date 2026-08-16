@@ -334,6 +334,21 @@ export class World implements IWorld, BossWorld {
     this.fx.burstHit(x, y, '#ff9b3a');
   }
 
+  /**
+   * Jeton de charge : une seule souris peut foncer a la fois, avec un temps
+   * mort entre deux. C'est ce qui separe « elles ripostent » de « elles te
+   * lynchent » — la difficulte doit venir de la lecture, pas du nombre.
+   */
+  private lungeGate = 0;
+
+  claimLunge(): boolean {
+    // Jamais pendant les i-frames : on ne s'acharne pas sur un chat au sol.
+    if (this.player.invuln > 0) return false;
+    if (this.time < this.lungeGate) return false;
+    this.lungeGate = this.time + 0.95;
+    return true;
+  }
+
   /** L'epee et le boomerang desamorcent les pieges. Renvoie le nombre detruit. */
   clearHazards(x: number, y: number, radius: number): number {
     let n = 0;

@@ -105,6 +105,15 @@ export function drawHyro(ctx: Ctx, v: HyroView) {
     fillStroke(ctx, '#f7c579', INK, 2.2);
   }
 
+  // --- Bras, mains et filet -------------------------------------------------
+  // Deux petites mains rondes ; la droite tient le filet. Le filet passe
+  // derriere le chat quand il balaie vers le fond, devant sinon : sans ce tri
+  // le cerceau se colle sur la tete au milieu du geste.
+  const geo = armGeometry(v, s, fx, fy, bob);
+  const netBehind = Math.sin(geo.ang) < -0.12;
+  if (netBehind) drawNetArm(ctx, v, s, geo);
+  if (back) drawPaw(ctx, geo.shoulderX, geo.shoulderY, geo.freeX, geo.freeY, s);
+
   // --- Corps ---------------------------------------------------------------
   ctx.save();
   ctx.translate(v.x, v.y - s * 0.62 + bob);
@@ -125,22 +134,17 @@ export function drawHyro(ctx: Ctx, v: HyroView) {
     ctx.lineTo(i * s * 0.3 + s * 0.06, -s * 0.2);
     ctx.stroke();
   }
-  // Echarpe rouge de heros
+  // Petit col de fourrure clair (le bandana, lui, est sur la tete)
   ctx.beginPath();
-  ctx.ellipse(0, s * 0.42, s * 0.6, s * 0.2, 0, 0, TAU);
-  ctx.fillStyle = '#d8412f';
+  ctx.ellipse(0, s * 0.44, s * 0.52, s * 0.16, 0, 0, TAU);
+  ctx.fillStyle = '#ffe0b0';
   ctx.fill();
   ctx.strokeStyle = INK;
-  ctx.lineWidth = 2.2;
+  ctx.lineWidth = 2;
   ctx.stroke();
-  const scarf = Math.sin(v.anim * 6) * s * 0.2;
-  ctx.beginPath();
-  ctx.moveTo(-s * 0.5, s * 0.45);
-  ctx.quadraticCurveTo(-s * 1.0 - fx * s * 0.4, s * 0.6 + scarf, -s * 1.2 - fx * s * 0.5, s * 0.2 + scarf);
-  ctx.lineTo(-s * 0.9 - fx * s * 0.4, s * 0.72 + scarf);
-  ctx.closePath();
-  fillStroke(ctx, '#c23a2a', INK, 2);
   ctx.restore();
+
+  if (!back) drawPaw(ctx, geo.shoulderX, geo.shoulderY, geo.freeX, geo.freeY, s);
 
   // --- Tete ----------------------------------------------------------------
   const hx = v.x + fx * s * 0.34;
@@ -165,6 +169,9 @@ export function drawHyro(ctx: Ctx, v: HyroView) {
   ctx.beginPath();
   ctx.arc(hx, hy, headR, 0, TAU);
   fillStroke(ctx, '#f7b451', INK, 3);
+
+  // --- Bandana rouge, noue sur la tete -------------------------------------
+  drawHeadBandana(ctx, v, hx, hy, headR, fx, fy);
 
   if (!back) {
     const eyeY = hy + headR * 0.02 + fy * headR * 0.18;
@@ -232,50 +239,241 @@ export function drawHyro(ctx: Ctx, v: HyroView) {
   }
 
   // --- Actions --------------------------------------------------------------
-  if (v.state === 'net') drawNetSwing(ctx, v, s, fx, fy);
+  // Le filet est toujours en main : au repos il repose sur l'epaule, et il
+  // s'anime des qu'on tente une capture.
+  if (!netBehind) drawNetArm(ctx, v, s, geo);
   if (v.state === 'sword') drawSwordSwing(ctx, v, s, fx, fy);
 
   ctx.restore();
 }
 
-function drawNetSwing(ctx: Ctx, v: HyroView, s: number, fx: number, fy: number) {
-  const a = clamp01(v.action);
-  const ang = v.dir - 1.1 + a * 2.2;
-  const len = s * 1.5;
-  const px = v.x + Math.cos(ang) * len;
-  const py = v.y - s * 0.9 + Math.sin(ang) * len * 0.75;
+/**
+ * Bandeau noue sur le crane : la calotte sert de gabarit (clip) pour qu'il
+ * epouse la tete quel que soit l'angle, et les deux pans flottent derriere.
+ */
+function drawHeadBandana(ctx: Ctx, v: HyroView, hx: number, hy: number, headR: number, fx: number, fy: number) {
+  const flap = Math.sin(v.anim * 7) * headR * 0.16;
+  // Pans, derriere la tete : on les dessine d'abord
+  const kx = hx - fx * headR * 0.78;
+  const ky = hy - headR * 0.34 - fy * headR * 0.2;
+  for (const side of [-1, 1] as const) {
+    ctx.beginPath();
+    ctx.moveTo(kx, ky);
+    ctx.quadraticCurveTo(
+      kx - fx * headR * 0.9 + side * headR * 0.3, ky - headR * 0.25 + flap * side,
+      kx - fx * headR * 1.5 + side * headR * 0.55, ky - headR * 0.1 + flap * side * 1.6,
+    );
+    ctx.lineTo(kx - fx * headR * 1.2 + side * headR * 0.2, ky + headR * 0.34);
+    ctx.closePath();
+    fillStroke(ctx, side < 0 ? '#c23a2a' : '#d8412f', INK, 2);
+  }
+  // Bandeau : decoupe sur la calotte
   ctx.save();
-  // Manche
   ctx.beginPath();
-  ctx.moveTo(v.x + fx * s * 0.3, v.y - s * 0.9);
-  ctx.lineTo(px, py);
-  ctx.strokeStyle = '#9a6b3c';
-  ctx.lineWidth = s * 0.16;
-  ctx.lineCap = 'round';
-  ctx.stroke();
-  // Cerceau + filet
-  ctx.save();
-  ctx.translate(px, py);
-  ctx.rotate(ang);
-  ctx.beginPath();
-  ctx.ellipse(s * 0.5, 0, s * 0.55, s * 0.44, 0, 0, TAU);
-  ctx.strokeStyle = '#d8d2c4';
-  ctx.lineWidth = s * 0.12;
-  ctx.stroke();
-  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-  ctx.lineWidth = 1.2;
+  ctx.arc(hx, hy, headR, 0, TAU);
+  ctx.clip();
+  ctx.fillStyle = '#d8412f';
+  ctx.fillRect(hx - headR, hy - headR * 1.02 - fy * headR * 0.12, headR * 2, headR * 0.66);
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+  ctx.fillRect(hx - headR, hy - headR * 0.46 - fy * headR * 0.12, headR * 2, headR * 0.1);
+  // Petits pois creme
+  ctx.fillStyle = 'rgba(255,240,210,0.85)';
   for (let i = -2; i <= 2; i++) {
     ctx.beginPath();
-    ctx.moveTo(s * 0.5 + i * s * 0.2, -s * 0.4);
-    ctx.lineTo(s * 0.5 + i * s * 0.2, s * 0.4);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(s * 0.0, i * s * 0.16);
-    ctx.lineTo(s * 1.0, i * s * 0.16);
-    ctx.stroke();
+    ctx.arc(hx + i * headR * 0.38, hy - headR * 0.72 - fy * headR * 0.12 + (i % 2) * headR * 0.16, headR * 0.07, 0, TAU);
+    ctx.fill();
   }
   ctx.restore();
+  // Liseré inferieur du bandeau, par-dessus le contour de tete
+  ctx.beginPath();
+  ctx.arc(hx, hy, headR, Math.PI * 0.06, Math.PI * 0.94, true);
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  // Noeud
+  ctx.beginPath();
+  ctx.arc(kx, ky, headR * 0.2, 0, TAU);
+  fillStroke(ctx, '#e8503c', INK, 2);
+}
+
+interface ArmGeo {
+  shoulderX: number; shoulderY: number;
+  freeX: number; freeY: number;
+  rShoulderX: number; rShoulderY: number;
+  gripX: number; gripY: number;
+  /** Cap du manche du filet (radians). */
+  ang: number;
+  /** Intensite de la frappe en cours : deforme le filet et trace le sillage. */
+  swingK: number;
+}
+
+/** Repos, armement, frappe : une seule courbe pour toute la gestuelle du filet. */
+function netAngleOffset(v: HyroView): { off: number; swingK: number } {
+  // Arc de balayage pense pour la vue de dessus : le filet part sur la droite
+  // du chat, passe **droit devant** (la ou le filet frappe) et finit a gauche.
+  const REST = 1.25;
+  const WIND = 2.05;
+  const END = -0.85;
+  if (v.state !== 'net') {
+    return { off: REST + Math.sin(v.anim * 2.2) * 0.07, swingK: 0 };
+  }
+  const a = clamp01(v.action);
+  if (a < 0.42) {
+    // Armement : le bras part en arriere, franc mais lisible
+    const k = a / 0.42;
+    const e = 1 - (1 - k) * (1 - k);
+    return { off: REST + (WIND - REST) * e, swingK: 0 };
+  }
+  // Frappe : depart explosif puis amorti
+  const k = (a - 0.42) / 0.58;
+  const e = 1 - Math.pow(1 - k, 3);
+  return { off: WIND + (END - WIND) * e, swingK: Math.pow(1 - k, 2) };
+}
+
+/** Positions des deux epaules et des deux mains, perspective 3/4 aplatie. */
+function armGeometry(v: HyroView, s: number, fx: number, fy: number, bob: number): ArmGeo {
+  const bodyY = v.y - s * 0.62 + bob;
+  // Poitrail : les deux bras partent de la, en bas et devant le corps, pour
+  // que les mains restent visibles hors de la silhouette.
+  // Vecteur « droite » du chat, ecrase verticalement comme le reste du decor
+  const rx = -fy;
+  const ry = fx * 0.5;
+  const swing = Math.sin(v.anim * 14) * v.move * s * 0.3;
+  // Les epaules sortent de sous le corps, les mains se posent **devant** lui :
+  // c'est la seule facon qu'elles restent hors de la silhouette en vue 3/4.
+  const shX = v.x + rx * -s * 0.34;
+  const shY = bodyY + s * 0.2 + ry * -s * 0.34;
+  const rShoulderX = v.x + rx * s * 0.34;
+  const rShoulderY = bodyY + s * 0.2 + ry * s * 0.34;
+  const { off, swingK } = netAngleOffset(v);
+  const ang = v.dir + off;
+  const reach = s * (0.86 + swingK * 0.34);
+  return {
+    shoulderX: shX,
+    shoulderY: shY,
+    freeX: shX + fx * s * 0.86 + fx * swing * 0.5,
+    freeY: shY + fy * s * 0.55 + fy * swing * 0.5 - Math.abs(swing) * 0.25,
+    rShoulderX,
+    rShoulderY,
+    gripX: rShoulderX + Math.cos(ang) * reach,
+    gripY: rShoulderY + Math.sin(ang) * reach * 0.62,
+    ang,
+    swingK,
+  };
+}
+
+/**
+ * Le filet : manche, cerceau et maillage. Au repos il pend le long du bras ;
+ * pendant une capture, le maillage se creuse a l'oppose du mouvement et un
+ * sillage suit le cerceau — c'est ce qui donne le poids du coup.
+ */
+function drawNetArm(ctx: Ctx, v: HyroView, s: number, g: ArmGeo) {
+  const cosA = Math.cos(g.ang);
+  const sinA = Math.sin(g.ang) * 0.62;
+  const poleLen = s * 1.95;
+  const hoopX = g.gripX + cosA * poleLen;
+  const hoopY = g.gripY + sinA * poleLen;
+  const hoopR = s * 0.72;
+
+  // Sillage de frappe
+  if (g.swingK > 0.05) {
+    ctx.save();
+    ctx.globalAlpha = g.swingK * 0.5;
+    ctx.beginPath();
+    ctx.arc(g.gripX, g.gripY, poleLen + hoopR * 0.5, g.ang - 1.5 * g.swingK, g.ang);
+    ctx.arc(g.gripX, g.gripY, poleLen * 0.45, g.ang, g.ang - 1.5 * g.swingK, true);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Bras droit + main
+  drawPaw(ctx, g.rShoulderX, g.rShoulderY, g.gripX, g.gripY, s);
+
+  // Manche
+  ctx.beginPath();
+  ctx.moveTo(g.gripX - cosA * s * 0.22, g.gripY - sinA * s * 0.22);
+  ctx.lineTo(hoopX, hoopY);
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = s * 0.19;
+  ctx.lineCap = 'round';
+  ctx.stroke();
+  ctx.strokeStyle = '#a8763f';
+  ctx.lineWidth = s * 0.12;
+  ctx.stroke();
+  // Poignee gainee
+  ctx.beginPath();
+  ctx.moveTo(g.gripX - cosA * s * 0.2, g.gripY - sinA * s * 0.2);
+  ctx.lineTo(g.gripX + cosA * s * 0.22, g.gripY + sinA * s * 0.22);
+  ctx.strokeStyle = '#5d4a34';
+  ctx.lineWidth = s * 0.15;
+  ctx.stroke();
+
+  // Cerceau + poche
+  ctx.save();
+  ctx.translate(hoopX, hoopY);
+  ctx.rotate(g.ang);
+  ctx.scale(1, 0.78);
+  // La poche traine derriere le cerceau, d'autant plus que le coup est rapide
+  const bag = s * (0.5 + g.swingK * 1.15);
+  ctx.beginPath();
+  ctx.moveTo(0, -hoopR);
+  ctx.quadraticCurveTo(-bag * 0.7, -hoopR * 0.78, -bag, 0);
+  ctx.quadraticCurveTo(-bag * 0.7, hoopR * 0.78, 0, hoopR);
+  ctx.quadraticCurveTo(hoopR * 0.42, 0, 0, -hoopR);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(255,255,255,0.22)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+  ctx.lineWidth = Math.max(1, s * 0.05);
+  ctx.stroke();
+  // Mailles : trois nervures vers la pointe, deux cerclages
+  ctx.strokeStyle = 'rgba(255,255,255,0.42)';
+  ctx.lineWidth = Math.max(0.8, s * 0.035);
+  for (const t of [-0.6, 0, 0.6]) {
+    ctx.beginPath();
+    ctx.moveTo(0, t * hoopR);
+    ctx.quadraticCurveTo(-bag * 0.6, t * hoopR * 0.55, -bag * 0.96, 0);
+    ctx.stroke();
+  }
+  for (const k of [0.36, 0.7]) {
+    ctx.beginPath();
+    ctx.ellipse(-bag * k, 0, hoopR * 0.28 * (1 - k), hoopR * (1 - k * 0.85), 0, 0, TAU);
+    ctx.stroke();
+  }
+  // Cerceau
+  ctx.beginPath();
+  ctx.ellipse(0, 0, hoopR * 0.36, hoopR, 0, 0, TAU);
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = s * 0.12;
+  ctx.stroke();
+  ctx.strokeStyle = '#efe8d6';
+  ctx.lineWidth = s * 0.075;
+  ctx.stroke();
   ctx.restore();
+}
+
+/** Une patte avant : avant-bras + main ronde. */
+function drawPaw(ctx: Ctx, sx: number, sy: number, hxp: number, hyp: number, s: number) {
+  ctx.beginPath();
+  ctx.moveTo(sx, sy);
+  ctx.quadraticCurveTo((sx + hxp) / 2, (sy + hyp) / 2 + s * 0.12, hxp, hyp);
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = s * 0.26;
+  ctx.lineCap = 'round';
+  ctx.stroke();
+  ctx.strokeStyle = '#f5a83f';
+  ctx.lineWidth = s * 0.16;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(hxp, hyp, s * 0.19, 0, TAU);
+  fillStroke(ctx, '#f7c579', INK, 2.2);
+  // Coussinet
+  ctx.beginPath();
+  ctx.arc(hxp, hyp + s * 0.04, s * 0.08, 0, TAU);
+  ctx.fillStyle = '#ffb9c4';
+  ctx.fill();
 }
 
 function drawSwordSwing(ctx: Ctx, v: HyroView, s: number, fx: number, fy: number) {

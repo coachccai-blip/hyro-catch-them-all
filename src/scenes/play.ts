@@ -120,19 +120,31 @@ export class PlayScene extends Scene {
     }
     this.world.setAim(this.aim.x, this.aim.y);
 
+    // --- Gadget clique / tape -------------------------------------------------
+    // La barre du bas est un vrai bouton : un clic (ou un appui) selectionne
+    // l'emplacement **et** declenche le gadget. Le clic est alors consomme,
+    // sinon on lancerait le filet en meme temps.
+    let slotClick: number | null = null;
+    if (input.pressed('net')) {
+      slotClick = this.hud.gadgetSlotAt(input.cursor.x, input.cursor.y);
+    }
+    for (const id of input.uiTaps) {
+      if (id.startsWith('gslot')) slotClick = Number(id.slice(5));
+    }
+
     const cmd: PlayerCmd = {
       moveX: input.move.x,
       moveY: input.move.y,
       aimX: this.aim.x,
       aimY: this.aim.y,
-      net: input.pressed('net') || input.aimReleased,
+      net: (input.pressed('net') || input.aimReleased) && slotClick === null,
       sword: input.pressed('sword'),
       jump: input.pressed('jump'),
       dash: input.pressed('dash'),
-      gadget: input.pressed('gadgetUse'),
+      gadget: input.pressed('gadgetUse') || slotClick !== null,
       gadgetHeld: input.isDown('gadgetUse'),
       cycle: (input.pressed('gadgetNext') ? 1 : 0) - (input.pressed('gadgetPrev') ? 1 : 0) + Math.sign(input.wheel),
-      slot: input.slotRequest,
+      slot: slotClick !== null ? slotClick + 1 : input.slotRequest,
     };
 
     this.world.update(dt, cmd, input.pressed('interact'));

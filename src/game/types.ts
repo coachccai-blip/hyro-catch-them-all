@@ -46,6 +46,12 @@ export interface IWorld {
   fireMissile(x: number, y: number, angle: number): void;
   /** Desamorce les pieges dans un rayon (epee, boomerang). */
   clearHazards(x: number, y: number, radius: number): number;
+  /**
+   * Reserve le droit de charger. Une seule souris a la fois peut se ruer sur
+   * Hyro : sans ce jeton, une meute le prend en tenailles et le coup devient
+   * impossible a lire.
+   */
+  claimLunge(): boolean;
   /** Effets declenches par les gadgets. */
   grappleLine(x0: number, y0: number, x1: number, y1: number): void;
   spawnGlue(x: number, y: number): void;

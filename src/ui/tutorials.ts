@@ -23,8 +23,8 @@ export const TUTORIALS: Record<string, TutorialCard> = {
   net: {
     title: 'Le filet',
     titleEn: 'The net',
-    body: 'Vise avec la souris (ou glisse à droite de l\'écran) puis lance le filet. Le cercle indique la zone d\'effet.',
-    bodyEn: 'Aim with the mouse (or swipe on the right side) then throw the net. The circle shows the effect area.',
+    body: 'Vise avec la souris (ou glisse à droite de l\'écran) puis lance le filet — Hyro le tient dans la main droite. Le cercle indique la zone d\'effet.',
+    bodyEn: 'Aim with the mouse (or swipe on the right side) then throw the net — Hyro holds it in his right hand. The circle shows the effect area.',
     icon: { kind: 'net', id: 'net' },
   },
   quota: {
@@ -40,6 +40,13 @@ export const TUTORIALS: Record<string, TutorialCard> = {
     body: 'Maj (ou B à la manette) pour une ruée brève, rechargée en 1 seconde. Elle t\'offre quelques images d\'invincibilité : c\'est ta parade contre les mines, les bombes et les missiles.',
     bodyEn: 'Shift (or B on a gamepad) for a short dash, back in 1 second. It grants a few invulnerability frames — your answer to mines, bombs and missiles.',
     icon: { kind: 'sword', id: 'sword' },
+  },
+  chase: {
+    title: 'Elles courent aussi vite que toi',
+    titleEn: 'They run as fast as you',
+    body: 'Impossible de rattraper une souris à la course : coupe-lui la route, coince-la, assomme-la, ou gagne du terrain à la ruée. Et méfie-toi — elle se retourne pour mordre. Un « ! » rouge annonce la charge.',
+    bodyEn: 'You cannot outrun a fleeing mouse: cut it off, corner it, stun it, or close the gap with a dash. And watch out — it turns around to bite. A red "!" telegraphs the charge.',
+    icon: { kind: 'mouse', id: 'blue' },
   },
   holes: {
     title: 'Trous de souris',

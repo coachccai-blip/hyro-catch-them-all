@@ -56,6 +56,17 @@ export class Hud {
   }
 
   /** Positionne les boutons tactiles selon la taille d'ecran. */
+  /** Rectangles des emplacements de gadget, pour le clic a la souris. */
+  private gadgetSlots: { i: number; x: number; y: number; w: number; h: number }[] = [];
+
+  /** Index de l'emplacement sous ce point ecran, ou null. */
+  gadgetSlotAt(x: number, y: number): number | null {
+    for (const r of this.gadgetSlots) {
+      if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return r.i;
+    }
+    return null;
+  }
+
   layoutTouch(view: View, big: boolean): TouchButtonDef[] {
     const k = big ? 1 : 0.86;
     const w = view.w;
@@ -70,6 +81,10 @@ export class Hud {
       { id: 'interact', action: 'interact', x: w - 382 * k, y: h - 218 * k, r: 40 * k, label: 'E' },
       { id: 'pause', action: 'pause', x: 58, y: 138, r: 34, label: 'pause' },
     ];
+    // La barre de gadgets est tactile : un appui selectionne **et** declenche.
+    for (const r of this.gadgetSlots) {
+      this.touch.push({ id: `gslot${r.i}`, action: null, x: r.x + r.w / 2, y: r.y + r.h / 2, r: r.w * 0.52 });
+    }
     return this.touch;
   }
 
@@ -77,6 +92,7 @@ export class Hud {
     ctx.save();
     ctx.globalAlpha = 0.55;
     for (const b of this.touch) {
+      if (b.id.startsWith('gslot')) continue; // deja dessine par la barre
       const pressed = input.isDown(b.action ?? 'net');
       ctx.beginPath();
       ctx.arc(b.x, b.y, b.r * (pressed ? 0.94 : 1), 0, TAU);
@@ -204,6 +220,7 @@ export class Hud {
     }
 
     // --- Barre de gadgets ---------------------------------------------------
+    if (!s.gadgets.length) this.gadgetSlots.length = 0;
     if (s.gadgets.length) {
       const n = s.gadgets.length;
       const slot = 66 * fs;
@@ -211,7 +228,9 @@ export class Hud {
       const totalW = n * slot + (n - 1) * gap;
       let gx = (view.w - totalW) / 2;
       const gy = view.h - 108 * fs;
+      this.gadgetSlots.length = 0;
       for (let i = 0; i < n; i++) {
+        this.gadgetSlots.push({ i, x: gx, y: gy, w: slot, h: slot });
         const id = s.gadgets[i];
         const sel = i === s.selected;
         const cd = s.cooldowns[id] ?? 0;

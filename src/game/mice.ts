@@ -11,6 +11,7 @@ import { drawMouse, type MouseView } from '../render/characters';
 import type { Ctx } from '../render/draw';
 import type { IMouse, IWorld } from './types';
 import type { MoveCaps } from './physics';
+import { PLAYER_SPEED } from './player';
 
 export type MouseState =
   | 'patrol' | 'alert' | 'flee' | 'attack' | 'hide' | 'stunned' | 'captured' | 'lured' | 'sabotage';
@@ -42,23 +43,39 @@ interface Profile {
   usesHoles: boolean;
   /** Tente d'esquiver un filet lancé dans sa direction. */
   dodges: boolean;
+  /**
+   * Délai entre deux ripostes en pleine fuite (s). Aucune souris ne se
+   * contente de courir : toutes se retournent pour mordre, plus ou moins
+   * souvent. C'est le curseur d'agressivité du bandana — large pour les deux
+   * du premier monde, qui enseignent la parade, serré ensuite.
+   */
+  harass: number;
 }
 
+/**
+ * Toutes les souris courent **exactement aussi vite qu'Hyro**. On ne les
+ * distance donc jamais : il faut les acculer, les assommer, couper leur
+ * trajectoire ou gagner du terrain à la ruée. La vitesse de patrouille reste
+ * plus basse — une souris qui ne t'a pas vu flâne.
+ */
+const FLEE = PLAYER_SPEED;
+
 export const PROFILES: Record<MouseKind, Profile> = {
-  // La Flâneuse reste la souris d'apprentissage : sans arme, sans esquive.
-  blue: { speed: 66, fleeSpeed: 128, detect: 180, cone: 1.1, hides: 0.1, aggressive: false, needsStun: false, tinker: false, shadow: false, zigzag: 0, scale: 1, weapon: 'none', dashes: false, usesHoles: false, dodges: false },
-  // La Trouillarde ne se bat pas : elle file dans le premier trou venu.
-  yellow: { speed: 96, fleeSpeed: 224, detect: 290, cone: 1.35, hides: 0.5, aggressive: false, needsStun: false, tinker: false, shadow: false, zigzag: 0.25, scale: 1, weapon: 'none', dashes: false, usesHoles: true, dodges: true },
+  // La Flâneuse reste la plus tendre : sans arme, sans esquive de filet — mais
+  // elle mord quand même quand on la serre de trop près.
+  blue: { speed: 96,  fleeSpeed: FLEE, detect: 240, cone: 1.25, hides: 0.1,  aggressive: false, needsStun: false, tinker: false, shadow: false, zigzag: 0,    scale: 1,    weapon: 'none',      dashes: false, usesHoles: false, dodges: false, harass: 4.6 },
+  // La Trouillarde file dans le premier trou venu, en griffant au passage.
+  yellow: { speed: 122, fleeSpeed: FLEE, detect: 320, cone: 1.4,  hides: 0.5,  aggressive: false, needsStun: false, tinker: false, shadow: false, zigzag: 0.25, scale: 1,    weapon: 'none',      dashes: true,  usesHoles: true,  dodges: true,  harass: 3.5 },
   // La Bagarreuse charge et jette des bombes à courte portée.
-  red: { speed: 104, fleeSpeed: 165, detect: 330, cone: 1.2, hides: 0.05, aggressive: true, needsStun: true, tinker: false, shadow: false, zigzag: 0, scale: 1.1, weapon: 'bomb', dashes: true, usesHoles: false, dodges: true },
+  red: { speed: 150, fleeSpeed: FLEE, detect: 380, cone: 1.35, hides: 0.05, aggressive: true,  needsStun: true,  tinker: false, shadow: false, zigzag: 0,    scale: 1.1,  weapon: 'bomb',      dashes: true,  usesHoles: false, dodges: true,  harass: 1.5 },
   // La Sprinteuse sème des mines derrière elle en fuyant.
-  green: { speed: 140, fleeSpeed: 372, detect: 330, cone: 1.5, hides: 0.35, aggressive: false, needsStun: true, tinker: false, shadow: false, zigzag: 0.9, scale: 0.95, weapon: 'mineTrail', dashes: true, usesHoles: true, dodges: true },
+  green: { speed: 168, fleeSpeed: FLEE, detect: 360, cone: 1.5,  hides: 0.35, aggressive: false, needsStun: true,  tinker: false, shadow: false, zigzag: 0.9,  scale: 0.95, weapon: 'mineTrail', dashes: true,  usesHoles: true,  dodges: true,  harass: 2.0 },
   // L'Ingénieuse piège le terrain et tire des missiles téléguidés.
-  purple: { speed: 98, fleeSpeed: 200, detect: 360, cone: 1.4, hides: 0.3, aggressive: false, needsStun: false, tinker: true, shadow: false, zigzag: 0.3, scale: 1.05, weapon: 'missile', dashes: false, usesHoles: false, dodges: true },
+  purple: { speed: 132, fleeSpeed: FLEE, detect: 400, cone: 1.45, hides: 0.3,  aggressive: false, needsStun: false, tinker: true,  shadow: false, zigzag: 0.3,  scale: 1.05, weapon: 'missile',   dashes: true,  usesHoles: false, dodges: true,  harass: 1.8 },
   // L'Ombre pose des mines qu'on ne voit qu'au radar, et disparaît par les trous.
-  black: { speed: 115, fleeSpeed: 255, detect: 300, cone: 1.5, hides: 0.55, aggressive: false, needsStun: false, tinker: false, shadow: true, zigzag: 0.45, scale: 1, weapon: 'mine', dashes: true, usesHoles: true, dodges: true },
+  black: { speed: 146, fleeSpeed: FLEE, detect: 340, cone: 1.55, hides: 0.55, aggressive: false, needsStun: false, tinker: false, shadow: true,  zigzag: 0.45, scale: 1,    weapon: 'mine',      dashes: true,  usesHoles: true,  dodges: true,  harass: 1.7 },
   // La Rare cumule tout : missiles, ruée et réseau de trous.
-  white: { speed: 130, fleeSpeed: 318, detect: 400, cone: 1.6, hides: 0.6, aggressive: false, needsStun: false, tinker: false, shadow: false, zigzag: 0.6, scale: 1.05, weapon: 'missile', dashes: true, usesHoles: true, dodges: true },
+  white: { speed: 160, fleeSpeed: FLEE, detect: 440, cone: 1.65, hides: 0.6,  aggressive: false, needsStun: false, tinker: false, shadow: false, zigzag: 0.6,  scale: 1.05, weapon: 'missile',   dashes: true,  usesHoles: true,  dodges: true,  harass: 1.4 },
 };
 
 const CAPS: MoveCaps = {};
@@ -104,6 +121,12 @@ export class MouseEnt implements IMouse {
   private dashCd = 0;
   private dashTimer = 0;
   private dashDir: Vec2 = { x: 1, y: 0 };
+  /** La ruee en cours est une charge : elle blesse au contact. */
+  private dashBites = false;
+  /** Delai avant la prochaine riposte. */
+  private harassCd = 1 + Math.random() * 2;
+  /** Temps d'armement de la charge : la souris se retourne avant de mordre. */
+  private lungeWind = 0;
   private weaponCd = 2;
   private holeTimer = 0;
   /** Delai avant de pouvoir replonger : sans lui, une souris se rend inattrapable. */
@@ -191,6 +214,7 @@ export class MouseEnt implements IMouse {
     this.dashCd -= dt;
     this.weaponCd -= dt;
     this.holeCd -= dt;
+    this.harassCd -= dt;
 
     // --- Dans un trou de souris : hors de portee, elle ressort ailleurs -----
     if (this.inHole) {
@@ -216,19 +240,50 @@ export class MouseEnt implements IMouse {
       return;
     }
 
+    // --- Armement de la charge ---------------------------------------------
+    // Court mais bien visible : la souris se plante, se retourne vers Hyro et
+    // rougeoie. Le joueur a le temps de reculer ou de lancer le filet.
+    if (this.lungeWind > 0) {
+      this.lungeWind -= dt;
+      this.move = damp(this.move, 0, 12, dt);
+      this.alerted = 0.4;
+      const pp = w.player;
+      this.dir = damp(this.dir, Math.atan2(pp.y - this.y, pp.x - this.x), 18, dt);
+      w.fx.spawn('spark', this.x, this.y - 10, 0, -30, 0.2, 3, '#ff6a5a');
+      if (this.lungeWind <= 0) {
+        // Le cap est fige a l'instant du depart : un pas de cote suffit a
+        // faire mordre la poussiere a la souris.
+        this.startDash(Math.cos(this.dir), Math.sin(this.dir), w, true);
+      }
+      return;
+    }
+
     // --- Ruee en cours ------------------------------------------------------
     if (this.dashTimer > 0) {
       this.dashTimer -= dt;
       this.dashing = this.dashTimer > 0;
-      const sp = 620;
+      const sp = this.dashBites ? 700 : 620;
       w.nav.moveAndSlide(this, this.dashDir.x * sp * dt, this.dashDir.y * sp * dt,
         this.perched ? PERCHED_CAPS : CAPS);
       this.move = 1;
       this.dir = Math.atan2(this.dashDir.y, this.dashDir.x);
-      w.fx.spawn('dust', this.x, this.y, 0, 0, 0.22, 6, 'rgba(255,255,255,0.4)');
+      w.fx.spawn('dust', this.x, this.y, 0, 0, 0.22, 6,
+        this.dashBites ? 'rgba(255,140,120,0.5)' : 'rgba(255,255,255,0.4)');
+      // Coup de griffe : la charge blesse au contact, puis s'arrete net.
+      if (this.dashBites) {
+        const pp = w.player;
+        if (dist(this.x, this.y, pp.x, pp.y) < this.r + pp.r + 4) {
+          w.damagePlayer(1, this.x, this.y);
+          w.fx.burstHit(pp.x, pp.y - 10, '#ff6a5a');
+          this.dashTimer = 0;
+          this.dashing = false;
+          this.dashBites = false;
+        }
+      }
       return;
     }
     this.dashing = false;
+    this.dashBites = false;
 
     // Visibilite : les Ombres sont quasi transparentes hors radar
     let targetAlpha = 1;
@@ -265,7 +320,7 @@ export class MouseEnt implements IMouse {
         this.timer = this.prof.aggressive ? 0.25 : 0.35;
         this.hiddenIn = false;
         w.sfx('alert');
-        w.alertNearby(this.x, this.y, 300);
+        w.alertNearby(this.x, this.y, 430);
       }
     } else {
       this.lastSeen -= dt;
@@ -297,14 +352,36 @@ export class MouseEnt implements IMouse {
     }
   }
 
-  /** Déclenche une ruée dans une direction donnée. */
-  private startDash(ax: number, ay: number, w: IWorld) {
+  /**
+   * Déclenche une ruée dans une direction donnée. `bites` en fait une charge
+   * offensive : elle blesse au contact et s'arrête sur l'impact.
+   */
+  private startDash(ax: number, ay: number, w: IWorld, bites = false) {
     const l = Math.hypot(ax, ay) || 1;
     this.dashDir = { x: ax / l, y: ay / l };
-    this.dashTimer = 0.24;
+    this.dashTimer = bites ? 0.3 : 0.24;
     this.dashing = true;
+    this.dashBites = bites;
     this.dashCd = 1.6 + Math.random() * 0.8;
-    w.sfx('dash');
+    w.sfx(bites ? 'squeak' : 'dash', bites ? 2 : 0);
+  }
+
+  /**
+   * Riposte en pleine fuite : la souris se retourne et charge. C'est ce qui
+   * empêche de la poursuivre bêtement en ligne droite — courir derrière elle
+   * coûte un cœur si on ne lit pas l'armement.
+   */
+  private tryHarass(w: IWorld, p: { x: number; y: number }, d: number): boolean {
+    if (this.harassCd > 0 || this.dashCd > 0 || this.perched) return false;
+    // Portee courte : elle mord celui qui la serre, pas celui qui passe au loin
+    if (d > 175 || d < 36) return false;
+    if (!w.nav.lineOfSight(this.x, this.y, p.x, p.y)) return false;
+    if (!w.claimLunge()) return false;
+    this.harassCd = this.prof.harass * (0.8 + Math.random() * 0.5);
+    this.lungeWind = 0.32;
+    w.fx.floatingText(this.x, this.y - 26, '!', '#ff6a5a');
+    w.sfx('alert');
+    return true;
   }
 
   /**
@@ -361,27 +438,27 @@ export class MouseEnt implements IMouse {
     if (this.weaponCd > 0) return;
     switch (this.prof.weapon) {
       case 'bomb':
-        if (d < 300 && d > 60) {
-          this.weaponCd = 3.4 + Math.random();
+        if (d < 360 && d > 50) {
+          this.weaponCd = 2.4 + Math.random() * 0.8;
           w.throwBomb(this.x, this.y - 10, p.x, p.y);
         }
         break;
       case 'mine':
-        if (d < 420) {
-          this.weaponCd = 3.8 + Math.random();
+        if (d < 460) {
+          this.weaponCd = 2.6 + Math.random() * 0.8;
           w.spawnMine(this.x, this.y);
         }
         break;
       case 'mineTrail':
         // Semée en pleine fuite : la Sprinteuse laisse un chapelet derrière elle
         if (this.state === 'flee' && this.move > 0.5) {
-          this.weaponCd = 1.5 + Math.random() * 0.8;
+          this.weaponCd = 1.1 + Math.random() * 0.6;
           w.spawnMine(this.x, this.y);
         }
         break;
       case 'missile':
-        if (d < 520 && w.nav.lineOfSight(this.x, this.y, p.x, p.y)) {
-          this.weaponCd = 3.6 + Math.random() * 1.4;
+        if (d < 560 && w.nav.lineOfSight(this.x, this.y, p.x, p.y)) {
+          this.weaponCd = 2.6 + Math.random() * 1;
           w.fireMissile(this.x, this.y - 10, Math.atan2(p.y - this.y, p.x - this.x));
           w.sfx('boomerang');
         }
@@ -452,6 +529,8 @@ export class MouseEnt implements IMouse {
     this.timer -= dt;
     this.zig += dt * (5 + this.prof.zigzag * 7);
     this.useWeapon(dt, w, p, d);
+    // Elle fuit **et** elle mord : la poursuite n'est jamais gratuite.
+    if (this.tryHarass(w, p, d)) return;
 
     // Filer dans un trou : la meilleure sortie de secours du jeu
     const hole = this.holeTarget ? null : this.findHole(w);
@@ -495,6 +574,10 @@ export class MouseEnt implements IMouse {
     if (d > this.prof.detect * 1.9 && this.timer <= 0) {
       this.state = 'patrol';
       this.home = { x: this.x, y: this.y };
+    } else if (this.prof.aggressive && this.timer <= 0 && this.lastSeen > 0) {
+      // La Bagarreuse ne fuit jamais longtemps : elle revient au contact.
+      this.state = 'attack';
+      this.timer = 3;
     }
   }
 
@@ -505,6 +588,7 @@ export class MouseEnt implements IMouse {
       return;
     }
     this.useWeapon(dt, w, p, d);
+    if (this.tryHarass(w, p, d)) return;
     this.moveTowards(dt, w, p.x, p.y, this.prof.speed * 1.85);
     if (d < this.r + p.r + 6 && this.cooldown <= 0) {
       this.cooldown = 1.4;
@@ -563,6 +647,7 @@ export class MouseEnt implements IMouse {
       this.dir = Math.atan2(p.y - this.y, p.x - this.x);
     }
     this.useWeapon(dt, w, p, d);
+    if (this.tryHarass(w, p, d)) return;
     if (this.cooldown <= 0 && d < 420 && w.nav.lineOfSight(this.x, this.y, p.x, p.y)) {
       this.cooldown = 2.6 + Math.random();
       // L'Ingénieuse piège aussi le sol entre deux tirs

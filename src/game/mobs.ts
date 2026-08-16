@@ -6,7 +6,7 @@
 import { TAU, clamp01, damp, dist, type Vec2 } from '../core/math';
 import type { MobKind } from '../levels/types';
 import { drawMob, type MobView } from '../render/characters';
-import type { Ctx } from '../render/draw';
+import { glow, type Ctx } from '../render/draw';
 import type { IMob, IWorld } from './types';
 import type { MoveCaps } from './physics';
 
@@ -370,26 +370,59 @@ export class Projectile {
   }
 
   draw(ctx: Ctx) {
+    // Trainee : quelques echos de la trajectoire, pour lire la vitesse
+    const l = Math.hypot(this.vx, this.vy) || 1;
+    const ux = this.vx / l;
+    const uy = this.vy / l;
+    ctx.save();
+    for (let i = 3; i >= 1; i--) {
+      ctx.globalAlpha = 0.13 * i;
+      ctx.beginPath();
+      ctx.arc(this.x - ux * i * 9, this.y - uy * i * 9, 7 - i, 0, TAU);
+      ctx.fillStyle = this.owner === 'mouse' ? '#cfd6e8' : '#ffd166';
+      ctx.fill();
+    }
+    ctx.restore();
+
     ctx.save();
     ctx.translate(this.x, this.y);
-    ctx.rotate(this.anim * 8);
-    ctx.beginPath();
     if (this.owner === 'mouse') {
-      // Objet jete (boulon)
-      ctx.moveTo(-7, -7);
-      ctx.lineTo(7, -5);
-      ctx.lineTo(6, 7);
-      ctx.lineTo(-6, 6);
+      // Shuriken de fromage : lame dentee qui tourne vite
+      glow(ctx, 0, 0, 26, '#ffd166', 0.45);
+      ctx.rotate(this.anim * 16);
+      ctx.beginPath();
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * TAU;
+        const r = i % 2 === 0 ? 10 : 5.5;
+        const px = Math.cos(a) * r;
+        const py = Math.sin(a) * r;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
       ctx.closePath();
-      ctx.fillStyle = '#a89c8c';
+      ctx.fillStyle = '#f2c14e';
+      ctx.fill();
+      ctx.strokeStyle = '#7a5a1e';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      // Trous de gruyere
+      ctx.fillStyle = '#c99a2e';
+      for (const [ox, oy] of [[-2.5, -1], [2, 2.5], [1.5, -3]]) {
+        ctx.beginPath();
+        ctx.arc(ox, oy, 1.6, 0, TAU);
+        ctx.fill();
+      }
     } else {
+      glow(ctx, 0, 0, 24, '#ffd166', 0.5);
+      ctx.rotate(this.anim * 8);
+      ctx.beginPath();
       ctx.arc(0, 0, 8, 0, TAU);
       ctx.fillStyle = '#ffd166';
+      ctx.fill();
+      ctx.strokeStyle = '#3a2a18';
+      ctx.lineWidth = 2;
+      ctx.stroke();
     }
-    ctx.fill();
-    ctx.strokeStyle = '#3a2a18';
-    ctx.lineWidth = 2;
-    ctx.stroke();
     ctx.restore();
   }
 }

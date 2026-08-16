@@ -11,7 +11,13 @@ import type { MoveCaps } from './physics';
 import type { IWorld } from './types';
 
 // --- Reglages de feeling -----------------------------------------------------
-const SPEED = 268;
+/**
+ * Vitesse de course d'Hyro. Exportee : les souris courent exactement aussi
+ * vite que lui, donc une seule constante doit gouverner les deux — sinon
+ * l'equilibre derive des qu'on retouche le joueur.
+ */
+export const PLAYER_SPEED = 268;
+const SPEED = PLAYER_SPEED;
 const SPEED_SKATE = 452;
 const ACCEL = 14;
 const ACCEL_SKATE = 6.5;

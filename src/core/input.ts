@@ -141,6 +141,12 @@ export class Input {
 
   /** Taps consommables par l'UI (menus). */
   taps: TapEvent[] = [];
+  /**
+   * Boutons tactiles **sans action** touches cette frame (barre de gadgets).
+   * Ils reservent la zone — le joystick et la visee ne s'y declenchent pas —
+   * mais c'est la scene qui decide de ce qu'ils font.
+   */
+  uiTaps: string[] = [];
   /** Slot de gadget demande directement (touches 1..8), sinon null. */
   slotRequest: number | null = null;
   /** Cran de molette accumule sur la frame. */
@@ -295,6 +301,8 @@ export class Input {
         if (b.action) {
           this.down.add(`T:${b.action}`);
           this.pressedNow.add(`T:${b.action}`);
+        } else {
+          this.uiTaps.push(b.id);
         }
         return;
       }
@@ -433,6 +441,7 @@ export class Input {
     this.releasedNow.clear();
     this.padPressedNow.clear();
     this.taps.length = 0;
+    this.uiTaps.length = 0;
     this.slotRequest = null;
     this.wheel = 0;
     this.aimReleased = false;

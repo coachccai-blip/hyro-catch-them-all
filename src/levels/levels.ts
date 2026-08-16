@@ -34,7 +34,7 @@ const W1: LevelDef[] = [
     locks: ['hidden'],
     hint: 'Vise avec la souris, clic gauche pour lancer le filet.',
     hintEn: 'Aim with the mouse, left click to throw the net.',
-    tutorials: ['move', 'net', 'jump', 'dodge', 'sword', 'quota'],
+    tutorials: ['move', 'net', 'jump', 'dodge', 'chase', 'quota'],
   }),
   lvl({
     id: '1-2', world: 1, index: 2, name: 'Les Pots Renversés', nameEn: 'Toppled Pots',

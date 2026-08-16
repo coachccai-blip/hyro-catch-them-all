@@ -8,7 +8,7 @@ import { rgba, star, type Ctx } from '../render/draw';
 
 export type ParticleKind =
   | 'poof' | 'star' | 'dust' | 'splash' | 'spark' | 'ring' | 'glue'
-  | 'heart' | 'note' | 'ember' | 'feather' | 'text';
+  | 'heart' | 'note' | 'ember' | 'feather' | 'text' | 'flash';
 
 interface Particle {
   active: boolean;
@@ -160,6 +160,16 @@ export class Particles {
           ctx.fill();
           ctx.restore();
           break;
+        case 'flash': {
+          // Boule de feu : elle s'ouvre vite et s'eteint plus vite encore
+          const e = 1 - k;
+          ctx.globalAlpha = Math.pow(k, 0.55);
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size * (0.4 + e * 0.85), 0, TAU);
+          ctx.fillStyle = p.color;
+          ctx.fill();
+          break;
+        }
         case 'poof':
           ctx.globalAlpha = k * 0.6;
           ctx.beginPath();

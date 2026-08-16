@@ -41,6 +41,7 @@ Astuce : `?level=3-2` dans l'URL lance directement un niveau
 | Déplacement | `ZQSD` / `WASD` / flèches (les deux jeux répondent, pas de config AZERTY à faire) |
 | Viser | souris — le réticule colle exactement au curseur |
 | Filet | clic gauche (portée : **un chat**, l'anneau autour d'Hyro la montre) |
+| Gadget | **clic sur son emplacement** dans la barre du bas (sélectionne *et* déclenche) |
 | Saut | `Espace` |
 | Ruée / esquive | `Maj` (recharge 1 s) |
 | Épée | clic droit ou `R` |
@@ -59,7 +60,8 @@ Vibration légère sur capture et sur coup reçu si la manette la supporte.
 ### Tactile
 Joystick virtuel flottant à gauche, glissement à droite pour viser (relâcher
 lance le filet), plus des boutons larges : filet, épée, saut, **ruée**, gadget,
-cycle, `E`, pause.
+cycle, `E`, pause. La **barre de gadgets du bas est tactile** : un appui sur un
+emplacement le sélectionne et l'active d'un coup — pareil au clic souris.
 
 Toutes les touches clavier et manette sont **reconfigurables** dans les options.
 
@@ -78,24 +80,51 @@ Toutes les touches clavier et manette sont **reconfigurables** dans les options.
   souris se planquent en hauteur** et sont intouchables depuis le sol — il faut
   monter sur la structure, les attraper en plein saut, ou fondre dessus au
   planeur.
+- **Hyro** porte son bandana rouge **noué sur la tête** (pans qui flottent
+  derrière lui) et tient son filet **dans la main droite** en permanence : au
+  repos il pend le long du bras, et à chaque capture il part en arrière, balaie
+  droit devant en laissant un sillage, la poche du filet se creusant à l'opposé
+  du mouvement. Il passe automatiquement derrière ou devant le chat selon le
+  côté qu'il balaie.
 - **7 types de souris**, identifiables par la couleur du bandana **et** par un
   symbole distinct (daltonisme) : Trouillarde ▲, Flâneuse ●, Bagarreuse ✚,
   Sprinteuse ◆, Ingénieuse ★, Ombre ☾, Blanche ✦ (1 par niveau, très cachée).
 - **Souris armées** — chaque bandana a son armement, et tout est **télégraphié
-  et destructible** : une mine affiche son rayon de déclenchement, une bombe
-  montre sa mèche qui raccourcit, un missile laisse une traînée et vire
-  lentement. Un coup d'épée ou un passage de boomerang désamorce n'importe
-  lequel.
+  et destructible**. Une mine pose un disque de déclenchement balayé par un
+  radar, hérisse ses picots et fait clignoter sa diode (verte tant qu'elle
+  s'arme, rouge ensuite) ; une bombe tourne en cloche, pulse de plus en plus
+  vite, consume une mèche dont la longueur *est* le compte à rebours et
+  projette au sol le cercle exact de son souffle ; un missile déploie une
+  tuyère à trois couches, laisse fumée et braises, et **trace en pointillé la
+  ligne qui le relie à sa cible**, réticule compris. Chaque explosion ouvre une
+  boule de feu à cœur blanc, sept langues de flamme, deux ondes de choc, des
+  éclats et un champignon de fumée. Un coup d'épée ou un passage de boomerang
+  désamorce n'importe lequel.
 
-| Bandana | Arme | Ruée | Trous | Esquive du filet |
+| Bandana | Arme | Riposte | Trous | Esquive du filet |
 |---|---|---|---|---|
-| Trouillarde (bleu) | — | non | non | non |
-| Flâneuse (jaune) | — | non | **oui** | oui |
-| Bagarreuse (rouge) | bombes lancées en cloche | **oui** | non | oui |
-| Sprinteuse (vert) | chapelet de mines en fuite | **oui** | **oui** | oui |
-| Ingénieuse (violet) | missiles téléguidés | non | non | oui |
-| Ombre (noir) | mines | **oui** | **oui** | oui |
-| Blanche | missiles | **oui** | **oui** | oui |
+| Trouillarde (bleu) | — | 4,6 s | non | non |
+| Flâneuse (jaune) | — | 3,5 s | **oui** | oui |
+| Bagarreuse (rouge) | bombes lancées en cloche | **1,5 s** | non | oui |
+| Sprinteuse (vert) | chapelet de mines en fuite | 2,0 s | **oui** | oui |
+| Ingénieuse (violet) | missiles téléguidés | 1,8 s | non | oui |
+| Ombre (noir) | mines | 1,7 s | **oui** | oui |
+| Blanche | missiles | **1,4 s** | **oui** | oui |
+
+- **Elles courent aussi vite qu'Hyro.** Une seule constante gouverne les deux
+  vitesses : on ne distance jamais une souris en fuite. Il faut la couper, la
+  coincer, l'assommer, ou gagner du terrain à la ruée. La vitesse de
+  *patrouille* reste plus basse — une souris qui ne t'a pas vu flâne.
+- **Elles fuient en mordant.** Aucune ne se contente de courir : à intervalle
+  régulier (colonne « Riposte »), elle se plante, se retourne — un « ! » rouge
+  et un temps d'armement de 0,32 s la trahissent — puis charge, **cap figé au
+  départ** : un pas de côté suffit à la faire mordre la poussière. La charge
+  blesse au contact et s'arrête sur l'impact. Poursuivre en ligne droite sans
+  lire l'armement coûte un cœur.
+- **Une seule charge à la fois.** Un jeton global (0,95 s de battement, jamais
+  pendant les images d'invincibilité) empêche la meute de prendre Hyro en
+  tenailles : la difficulté doit venir de la lecture, pas du nombre. Sans ce
+  garde-fou, mesuré au bot, le niveau 1-1 devenait mortel.
 
 - **Ruée d'Hyro** — `Maj` / `B`, recharge **1 seconde**, quelques images
   d'invincibilité. C'est la réponse aux mines, bombes et missiles. Elle ne

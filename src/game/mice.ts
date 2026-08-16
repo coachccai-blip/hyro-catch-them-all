@@ -278,6 +278,10 @@ export class MouseEnt implements IMouse {
           this.dashTimer = 0;
           this.dashing = false;
           this.dashBites = false;
+          // Elle repart aussitot : mordre et filer, jamais s'incruster
+          this.state = 'flee';
+          this.timer = 1.8;
+          this.cooldown = Math.max(this.cooldown, 1.2);
         }
       }
       return;
@@ -589,10 +593,23 @@ export class MouseEnt implements IMouse {
     }
     this.useWeapon(dt, w, p, d);
     if (this.tryHarass(w, p, d)) return;
-    this.moveTowards(dt, w, p.x, p.y, this.prof.speed * 1.85);
+    // La parite de vitesse vaut pour la **fuite** : c'est ce qui rend la
+    // chasse difficile. En poursuite, elle est volontairement un cran en
+    // dessous — mesure au navigateur : a vitesse egale et sans rampe
+    // d'acceleration, une Bagarreuse colle a 36 px quoi que fasse le joueur,
+    // qui perd alors ses cinq coeurs sans aucun recours. A 88 %, courir droit
+    // devant rompt toujours le contact, et la ruee le rompt d'un coup.
+    this.moveTowards(dt, w, p.x, p.y, Math.min(this.prof.speed * 1.85, PLAYER_SPEED * 0.88));
     if (d < this.r + p.r + 6 && this.cooldown <= 0) {
-      this.cooldown = 1.4;
+      this.cooldown = 1.9;
       w.damagePlayer(1, this.x, this.y);
+      // Mordre puis decrocher. Sans ce repli, une souris collee au chat le
+      // grignote indefiniment : dans un decor encombre, le joueur ne peut pas
+      // toujours fuir en ligne droite, et il n'a alors aucune parade.
+      this.state = 'flee';
+      this.timer = 1.6;
+      this.lastSeen = 1.6;
+      this.harassCd = Math.max(this.harassCd, 1.2);
     }
   }
 

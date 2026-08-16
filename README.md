@@ -125,6 +125,15 @@ Toutes les touches clavier et manette sont **reconfigurables** dans les options.
   pendant les images d'invincibilité) empêche la meute de prendre Hyro en
   tenailles : la difficulté doit venir de la lecture, pas du nombre. Sans ce
   garde-fou, mesuré au bot, le niveau 1-1 devenait mortel.
+- **Mordre puis décrocher.** Une souris qui touche Hyro repart aussitôt en
+  fuite pendant ~1,6 s. La parité de vitesse vaut pour la **fuite** ; en
+  poursuite elle reste un cran en dessous (88 %). Sans ces deux règles,
+  mesuré au navigateur, une Bagarreuse se colle à 27 px — la distance de
+  contact exacte — et vide les cinq cœurs sans qu'aucune fuite, dans un décor
+  encombré, ne puisse rompre le contact.
+- **Répit de départ** de 2 s, et **trêve pendant les encarts de tutoriel** :
+  Hyro apparaît parfois à portée d'une souris agressive, et il n'a pas la main
+  tant qu'une fiche est affichée.
 
 - **Ruée d'Hyro** — `Maj` / `B`, recharge **1 seconde**, quelques images
   d'invincibilité. C'est la réponse aux mines, bombes et missiles. Elle ne

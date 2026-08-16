@@ -80,10 +80,14 @@ export class PlayScene extends Scene {
         this.tutorialTimer = 0;
         audio.sfx('uiconfirm');
       }
-      // Le monde continue de vivre discretement (ambiance) mais sans action
+      // Le monde continue de vivre discretement (ambiance), mais en treve :
+      // le joueur n'a pas la main, il ne doit rien pouvoir encaisser.
+      this.world.peaceful = true;
       this.world.update(Math.min(dt, 0.016) * 0.15, this.idleCmd(), false);
       return;
     }
+
+    this.world.peaceful = false;
 
     if (input.pressed('pause') && !this.ended) {
       this.game.push(new PauseScene(this));

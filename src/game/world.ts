@@ -178,6 +178,23 @@ export class World implements IWorld, BossWorld {
   failed = false;
   /** Cinematique de capture (zoom facon Ape Escape). */
   cine: CaptureCine | null = null;
+  /**
+   * Treve : le decor continue de vivre mais rien ne peut blesser Hyro. Actif
+   * pendant les encarts de tutoriel, ou le joueur n'a aucun controle — sans
+   * cela, des souris agressives le vident de ses coeurs pendant qu'il lit.
+   */
+  peaceful = false;
+  /**
+   * Repit de debut de niveau : Hyro apparait parfois a portee d'une souris
+   * agressive. Sans ces quelques secondes, il perd des coeurs avant meme que
+   * la banniere du niveau ait fini de s'afficher.
+   */
+  private grace = 2;
+
+  /** Hyro est-il a l'abri (treve de tutoriel ou repit de depart) ? */
+  private get safe(): boolean {
+    return this.peaceful || this.grace > 0;
+  }
   /** Message contextuel affiche en bas de l'ecran. */
   toast = '';
   toastTimer = 0;
@@ -260,6 +277,7 @@ export class World implements IWorld, BossWorld {
   }
 
   damagePlayer(amount: number, fromX: number, fromY: number) {
+    if (this.safe) return;
     const before = this.player.hp;
     this.player.hurt(amount, fromX, fromY, this);
     if (this.player.hp < before) this.damageTaken += before - this.player.hp;
@@ -343,7 +361,7 @@ export class World implements IWorld, BossWorld {
 
   claimLunge(): boolean {
     // Jamais pendant les i-frames : on ne s'acharne pas sur un chat au sol.
-    if (this.player.invuln > 0) return false;
+    if (this.safe || this.player.invuln > 0) return false;
     if (this.time < this.lungeGate) return false;
     this.lungeGate = this.time + 0.95;
     return true;
@@ -566,6 +584,7 @@ export class World implements IWorld, BossWorld {
     const sdt = dt * this.timeScale;
 
     this.time += sdt;
+    this.grace = Math.max(0, this.grace - dt);
     if (!this.finished && !this.failed) this.elapsed += dt;
     this.shakePower = damp(this.shakePower, 0, 7, dt);
     this.toastTimer -= dt;

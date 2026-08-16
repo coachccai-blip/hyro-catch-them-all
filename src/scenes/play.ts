@@ -41,6 +41,7 @@ export class PlayScene extends Scene {
     const save = this.game.save;
     const gadgets = save.data.gadgets as GadgetId[];
     this.world = new World(def, gadgets, [], save.settings.screenShake);
+    this.world.player.infiniteHp = save.settings.infiniteHp;
     this.world.resize(this.game.view.w, this.game.view.h);
     this.world.renderer.quality = this.game.quality;
     save.data.lastLevelId = this.levelId;

@@ -6,7 +6,7 @@
 import { defaultKeyBindings, defaultPadBindings, type KeyBindings, type PadBindings } from '../core/input';
 
 export const SAVE_KEY = 'hyro.save';
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
 export type Medal = 'none' | 'bronze' | 'silver' | 'gold';
 export type Lang = 'fr' | 'en';
@@ -35,6 +35,8 @@ export interface Settings {
   bigText: boolean;
   highContrast: boolean;
   aimAssist: boolean;
+  /** Vie illimitee : les coups font reculer et clignoter, mais ne tuent plus. */
+  infiniteHp: boolean;
   quality: 'auto' | 'low' | 'high';
   keys: KeyBindings;
   pad: PadBindings;
@@ -62,6 +64,7 @@ export function defaultSettings(): Settings {
     bigText: false,
     highContrast: false,
     aimAssist: true,
+    infiniteHp: true,
     quality: 'auto',
     keys: defaultKeyBindings(),
     pad: defaultPadBindings(),
@@ -103,6 +106,10 @@ function migrate(raw: Partial<SaveData> & { version?: number }): SaveData {
   // Les bindings peuvent manquer une action ajoutee par une mise a jour.
   out.settings.keys = { ...defaultKeyBindings(), ...(raw.settings?.keys ?? {}) };
   out.settings.pad = { ...defaultPadBindings(), ...(raw.settings?.pad ?? {}) };
+  // v5 : la vie illimitee est activee par defaut, y compris pour une
+  // sauvegarde existante — c'est le reglage demande, l'option permet de la
+  // couper pour qui veut le defi complet.
+  if ((raw.version ?? 0) < 5) out.settings.infiniteHp = true;
   // v4 : la ruee prend Maj, le gadget se replie sur F. Sans ce nettoyage, une
   // vieille sauvegarde declencherait les deux sur la meme touche.
   if ((raw.version ?? 0) < 4) {

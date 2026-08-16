@@ -90,6 +90,13 @@ export class Player {
   selected = 0;
   cooldowns: Partial<Record<GadgetId, number>> = {};
 
+  /**
+   * Vie illimitee : le coup garde tout son retour (recul, flash, son, secousse)
+   * pour rester lisible comme une erreur, mais ne retire aucun coeur. Le suivi
+   * des degats continue en coulisse, pour la medaille « sans dommage ».
+   */
+  infiniteHp = false;
+
   radarOn = false;
   skating = false;
   gliding = false;
@@ -692,10 +699,11 @@ export class Player {
 
   // --- Degats ---------------------------------------------------------------
 
-  hurt(amount: number, fromX: number, fromY: number, w: IWorld, ignoreInvuln = false) {
-    if (this.dead) return;
-    if (!ignoreInvuln && (this.invuln > 0 || this.dashing)) return;
-    this.hp -= amount;
+  /** Renvoie `true` si le coup a porte (utile pour compter les degats). */
+  hurt(amount: number, fromX: number, fromY: number, w: IWorld, ignoreInvuln = false): boolean {
+    if (this.dead) return false;
+    if (!ignoreInvuln && (this.invuln > 0 || this.dashing)) return false;
+    if (!this.infiniteHp) this.hp -= amount;
     this.invuln = INVULN_TIME;
     const a = Math.atan2(this.y - fromY, this.x - fromX);
     this.knock = KNOCK_TIME;
@@ -706,10 +714,11 @@ export class Player {
     w.sfx('hurt');
     w.shake(10);
     w.fx.burstHit(this.x, this.y - 20, '#ff5a6a');
-    if (this.hp <= 0) {
+    if (this.hp <= 0 && !this.infiniteHp) {
       this.hp = 0;
       this.dead = true;
     }
+    return true;
   }
 
   heal(n: number) {

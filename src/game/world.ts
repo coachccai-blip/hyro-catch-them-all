@@ -278,9 +278,9 @@ export class World implements IWorld, BossWorld {
 
   damagePlayer(amount: number, fromX: number, fromY: number) {
     if (this.safe) return;
-    const before = this.player.hp;
-    this.player.hurt(amount, fromX, fromY, this);
-    if (this.player.hp < before) this.damageTaken += before - this.player.hp;
+    // On compte les degats meme en vie illimitee : la medaille « sans
+    // dommage » doit rester meritee.
+    if (this.player.hurt(amount, fromX, fromY, this)) this.damageTaken += amount;
   }
 
   spawnProjectile(x: number, y: number, vx: number, vy: number, owner: 'mob' | 'mouse', damage: number) {
@@ -1243,6 +1243,7 @@ export class World implements IWorld, BossWorld {
       caught: this.caught.length,
       quota: this.quota,
       dodgeCd: this.player.dodgeCd,
+      infiniteHp: this.player.infiniteHp,
       total: this.totalMice,
       gadgets: this.player.gadgets,
       selected: this.player.selected,

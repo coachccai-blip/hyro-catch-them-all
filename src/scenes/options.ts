@@ -45,6 +45,7 @@ export class OptionsScene extends Scene {
       { id: 'lang', label: t('language'), kind: 'choice', choices: ['Français', 'English'], value: s.lang === 'en' ? 1 : 0 },
       { id: 'shake', label: t('shake'), kind: 'slider', value: s.screenShake },
       { id: 'aim', label: t('aimAssist'), kind: 'toggle', value: s.aimAssist ? 1 : 0 },
+      { id: 'life', label: t('infiniteHp'), kind: 'toggle', value: s.infiniteHp ? 1 : 0 },
       { id: 'big', label: t('bigText'), kind: 'toggle', value: s.bigText ? 1 : 0 },
       { id: 'fps', label: t('showFps'), kind: 'toggle', value: s.showFps ? 1 : 0 },
       { id: 'quality', label: t('quality'), kind: 'choice', hint: t('qualityHint'), choices: [t('qualityAuto'), t('qualityLow'), t('qualityHigh')], value: s.quality === 'low' ? 1 : s.quality === 'high' ? 2 : 0 },
@@ -125,6 +126,7 @@ export class OptionsScene extends Scene {
       }
       switch (res.activated) {
         case 'aim': it.value = it.value ? 0 : 1; s.aimAssist = !!it.value; save.touch(); break;
+        case 'life': it.value = it.value ? 0 : 1; s.infiniteHp = !!it.value; save.touch(); break;
         case 'big': it.value = it.value ? 0 : 1; s.bigText = !!it.value; save.touch(); break;
         case 'fps': it.value = it.value ? 0 : 1; s.showFps = !!it.value; save.touch(); break;
         case 'lang': it.value = ((it.value ?? 0) + 1) % 2; s.lang = it.value === 1 ? 'en' : 'fr'; setLang(s.lang); this.buildMain(); save.touch(); break;

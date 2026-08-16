@@ -199,12 +199,28 @@ Volumes musique et effets réglables séparément, avec ducking sur les jingles.
 
 ---
 
+## Difficulté
+
+**La vie est illimitée par défaut.** Les coups gardent tout leur retour — recul,
+flash rouge, son, secousse d'écran — pour que l'erreur reste lisible, mais ils
+ne retirent plus de cœur et il n'y a plus d'écran de défaite. Le HUD affiche
+alors un cœur suivi d'un **∞** plutôt qu'une jauge trompeuse.
+
+Les dégâts continuent d'être comptés en coulisse : la médaille « sans dommage »
+reste méritée, et le chrono garde tout son sens pour qui vise le 100 %.
+
+L'option **Vie illimitée** dans le menu Options permet de la couper et de
+retrouver les cinq cœurs, la chute mortelle et le Game Over.
+
+---
+
 ## Sauvegarde
 
 Automatique dans le `localStorage` : niveaux terminés, souris capturées par
 identifiant (suivi des Blanches), gadgets, médailles, options et remapping.
 Le schéma est **versionné** avec migration douce (la v4 déplace `Maj` du
-gadget vers la ruée sans casser un remapping existant) ; la réinitialisation
+gadget vers la ruée sans casser un remapping existant, la v5 active la vie
+illimitée y compris sur une sauvegarde existante) ; la réinitialisation
 demande une **double confirmation**.
 
 ---

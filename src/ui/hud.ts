@@ -23,6 +23,8 @@ export interface HudState {
   quota: number;
   /** Recharge de la ruee (secondes restantes). */
   dodgeCd: number;
+  /** Vie illimitee : les coeurs cedent la place a un symbole infini. */
+  infiniteHp: boolean;
   total: number;
   gadgets: string[];
   selected: number;
@@ -157,11 +159,19 @@ export class Hud {
     const fs = bigText ? 1.18 : 1;
 
     // --- Coeurs -------------------------------------------------------------
-    for (let i = 0; i < s.maxHp; i++) {
-      const pop = this.heartPop[i] ?? 0;
-      const x = 56 + i * 52;
-      const y = 54 + pop * 6;
-      drawHeartIcon(ctx, x, y, 22 * (1 + pop * 0.25), i < s.hp);
+    if (s.infiniteHp) {
+      // Un seul coeur, suivi d'un infini : afficher cinq coeurs pleins qui ne
+      // baissent jamais donnerait une fausse information au joueur.
+      const pop = this.heartPop[0] ?? 0;
+      drawHeartIcon(ctx, 56, 54 + pop * 6, 22 * (1 + pop * 0.25), true);
+      outlinedText(ctx, '∞', 102, 62, 42, '#ff8a9b', '#2a1226', 6, 'left');
+    } else {
+      for (let i = 0; i < s.maxHp; i++) {
+        const pop = this.heartPop[i] ?? 0;
+        const x = 56 + i * 52;
+        const y = 54 + pop * 6;
+        drawHeartIcon(ctx, x, y, 22 * (1 + pop * 0.25), i < s.hp);
+      }
     }
 
     // --- Jauge de ruee ------------------------------------------------------

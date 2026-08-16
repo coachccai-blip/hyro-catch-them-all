@@ -296,16 +296,29 @@ export class World implements IWorld, BossWorld {
   // --- Armement des souris --------------------------------------------------
   // Plafond volontaire : au-dela le niveau devient illisible, et une arene
   // saturee de mines punit la patience au lieu de recompenser la lecture.
+  // Plafonds par type en plus : trois missiles simultanes restent esquivables,
+  // six deviennent un barrage que rien ne permet d'eviter.
   private readonly maxHazards = 26;
+  private readonly maxOf = { mine: 18, bomb: 4, missile: 3 };
+
+  private countOf(kind: 'mine' | 'bomb' | 'missile'): number {
+    let n = 0;
+    for (const h of this.hazards) if (!h.dead && h.kind === kind) n++;
+    return n;
+  }
+
+  private canSpawn(kind: 'mine' | 'bomb' | 'missile'): boolean {
+    return this.hazards.length < this.maxHazards && this.countOf(kind) < this.maxOf[kind];
+  }
 
   spawnMine(x: number, y: number) {
-    if (this.hazards.length >= this.maxHazards) return;
+    if (!this.canSpawn('mine')) return;
     this.hazards.push(new Hazard('mine', x, y));
     this.fx.dust(x, y, 'rgba(180,180,200,0.8)', 3);
   }
 
   throwBomb(x: number, y: number, tx: number, ty: number) {
-    if (this.hazards.length >= this.maxHazards) return;
+    if (!this.canSpawn('bomb')) return;
     const h = new Hazard('bomb', x, y);
     h.throwTo(tx, ty);
     this.hazards.push(h);
@@ -313,7 +326,7 @@ export class World implements IWorld, BossWorld {
   }
 
   fireMissile(x: number, y: number, angle: number) {
-    if (this.hazards.length >= this.maxHazards) return;
+    if (!this.canSpawn('missile')) return;
     const h = new Hazard('missile', x, y);
     h.launch(angle);
     this.hazards.push(h);
@@ -352,12 +365,19 @@ export class World implements IWorld, BossWorld {
 
   onMouseCaptured(m: IMouse) {
     if (this.caught.includes(m.id)) return;
-    this.caught.push(m.id);
     this.fx.burstCapture(m.x, m.y, (m as MouseEnt).color);
     this.sfx('capture', this.caught.length % 4);
     // Les souris proches paniquent
     this.alertNearby(m.x, m.y, 260);
 
+    // Pendant le combat de boss, les sbires invoques ne comptent pas dans le
+    // quota : seul Nerat termine le niveau.
+    if (this.boss && !this.boss.dead) {
+      this.showToast('Sbire capturé !', 1.2);
+      return;
+    }
+
+    this.caught.push(m.id);
     const final = this.caught.length >= this.quota;
     this.cine = {
       x: m.x,

@@ -136,7 +136,7 @@ export interface CaptureCine {
 }
 
 export type WorldEvent =
-  | { type: 'win'; caught: number; total: number; time: number; damage: number; white: boolean }
+  | { type: 'win'; caught: number; total: number; time: number; damage: number; white: boolean; streak: number }
   | { type: 'lose' }
   | { type: 'tutorial'; id: string };
 
@@ -178,6 +178,16 @@ export class World implements IWorld, BossWorld {
   failed = false;
   /** Cinematique de capture (zoom facon Ape Escape). */
   cine: CaptureCine | null = null;
+  /**
+   * Serie de captures sans encaisser un coup. C'est ce qui remplace la peur
+   * de mourir : on ne perd plus de coeurs, on perd sa serie — et une prise.
+   */
+  streak = 0;
+  bestStreak = 0;
+  /** Animation du compteur de serie (0..1). */
+  streakPop = 0;
+  /** Message d'evasion affiche en grand. */
+  escapeFlash = 0;
   /**
    * Treve : le decor continue de vivre mais rien ne peut blesser Hyro. Actif
    * pendant les encarts de tutoriel, ou le joueur n'a aucun controle — sans
@@ -280,7 +290,15 @@ export class World implements IWorld, BossWorld {
     if (this.safe) return;
     // On compte les degats meme en vie illimitee : la medaille « sans
     // dommage » doit rester meritee.
-    if (this.player.hurt(amount, fromX, fromY, this)) this.damageTaken += amount;
+    if (!this.player.hurt(amount, fromX, fromY, this)) return;
+    this.damageTaken += amount;
+    // L'enjeu n'est plus la mort : c'est la serie qui casse et une souris qui
+    // s'echappe du panier. On perd ce qu'on a gagne, pas la partie.
+    if (this.streak > 0) {
+      this.showToast(`Série brisée ! (x${this.streak})`, 1.6);
+      this.streak = 0;
+    }
+    this.releaseCaptured();
   }
 
   spawnProjectile(x: number, y: number, vx: number, vy: number, owner: 'mob' | 'mouse', damage: number) {
@@ -411,6 +429,9 @@ export class World implements IWorld, BossWorld {
     }
 
     this.caught.push(m.id);
+    this.streak++;
+    this.bestStreak = Math.max(this.bestStreak, this.streak);
+    this.streakPop = 1;
     const final = this.caught.length >= this.quota;
     this.cine = {
       x: m.x,
@@ -424,6 +445,29 @@ export class World implements IWorld, BossWorld {
     };
     this.shake(final ? 10 : 5);
     if (final) this.sfx('unlock');
+  }
+
+  /**
+   * Une prise s'echappe du panier : la derniere attrapee, la plus douloureuse
+   * a perdre. Elle rejaillit a cote d'Hyro et detale.
+   */
+  private releaseCaptured() {
+    // Nerat ne s'echappe jamais : le boss n'est pas une monnaie d'echange.
+    for (let i = this.caught.length - 1; i >= 0; i--) {
+      const id = this.caught[i];
+      if (id === 'nerat') continue;
+      const m = this.mice.find((x) => x.id === id);
+      if (!m) continue;
+      this.caught.splice(i, 1);
+      const a = Math.random() * TAU;
+      const px = this.player.x + Math.cos(a) * 44;
+      const py = this.player.y + Math.sin(a) * 44;
+      m.escape(px, py, this);
+      this.escapeFlash = 1.4;
+      this.shake(6);
+      this.showToast('Une souris s\'échappe du panier !', 2.2);
+      return;
+    }
   }
 
   /** Un bouton d'action pendant la cinematique : on coupe court. */
@@ -553,6 +597,7 @@ export class World implements IWorld, BossWorld {
       total: this.totalMice,
       time: this.elapsed,
       damage: this.damageTaken,
+      streak: this.bestStreak,
       white: this.mice.some((m) => m.kind === 'white' && m.captured),
     });
   }
@@ -588,6 +633,8 @@ export class World implements IWorld, BossWorld {
     if (!this.finished && !this.failed) this.elapsed += dt;
     this.shakePower = damp(this.shakePower, 0, 7, dt);
     this.toastTimer -= dt;
+    this.streakPop = Math.max(0, this.streakPop - dt * 2.2);
+    this.escapeFlash = Math.max(0, this.escapeFlash - dt);
     this.radarPing = Math.max(0, this.radarPing - sdt);
     this.radarActive = this.player.radarOn && this.hasGadget('radar');
 
@@ -1244,6 +1291,8 @@ export class World implements IWorld, BossWorld {
       quota: this.quota,
       dodgeCd: this.player.dodgeCd,
       infiniteHp: this.player.infiniteHp,
+      streak: this.streak,
+      streakPop: this.streakPop,
       total: this.totalMice,
       gadgets: this.player.gadgets,
       selected: this.player.selected,

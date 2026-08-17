@@ -33,6 +33,29 @@ Astuce : `?level=3-2` dans l'URL lance directement un niveau
 
 ---
 
+## Ce qui rend la chasse jouable
+
+Quatre systèmes se répondent, et ils comptent plus que le contenu :
+
+- **Le bond du chat.** Lancer le filet projette Hyro vers sa visée. Le saut
+  couvre exactement l'excès de distance — viser à bout portant ne déclenche
+  rien, viser loin déclenche le bond complet (86 px, plafonné). Sans lui, une
+  souris qui court *exactement* à votre vitesse ne se rattrapait jamais : la
+  poursuite n'avait aucune conclusion. Mesuré : 0 px à 20 px de distance,
+  96 px au-delà.
+- **La série.** Chaque capture sans encaisser de coup incrémente un
+  multiplicateur — DOUBLÉ, EN SÉRIE, EN FEU, DÉCHAÎNÉ, LÉGENDAIRE — affiché
+  sous le compteur et reporté en fin de niveau. C'est ce qui donne une raison
+  de rejouer un niveau déjà terminé.
+- **L'évasion du panier.** Encaisser un coup ne coûte plus de cœur (voir
+  *Difficulté*) : il **libère la dernière souris attrapée**, qui rejaillit à
+  côté d'Hyro et détale avec un sursis de 0,9 s. La tension revient intacte —
+  on protège son butin — sans jamais renvoyer à un écran de défaite. Les
+  sbires de Nerat ont enfin un rôle.
+- **La roue des gadgets.** Voir ci-dessous.
+
+---
+
 ## Contrôles
 
 ### Clavier + souris
@@ -46,7 +69,7 @@ Astuce : `?level=3-2` dans l'URL lance directement un niveau
 | Ruée / esquive | `Maj` (recharge 1 s) |
 | Épée | clic droit ou `R` |
 | Gadget | `F` |
-| Changer de gadget | `X` / `C`, molette, ou `1`–`8` |
+| Changer de gadget | **`Tab` ou clic molette : la roue** (voir plus bas), `X` / `C`, molette, ou `1`–`8` |
 | Interagir / terminer le niveau | `E` |
 | Pause | `Échap` |
 | Debug (hitboxes, cônes de vision) | `F1` |
@@ -62,6 +85,19 @@ Joystick virtuel flottant à gauche, glissement à droite pour viser (relâcher
 lance le filet), plus des boutons larges : filet, épée, saut, **ruée**, gadget,
 cycle, `E`, pause. La **barre de gadgets du bas est tactile** : un appui sur un
 emplacement le sélectionne et l'active d'un coup — pareil au clic souris.
+
+### La roue des gadgets
+
+Maintenez **`Tab`** (clic molette, **R3** à la manette, ou le bouton **◎** au
+tactile) : le temps ralentit à 18 %, une roue s'ouvre avec un secteur par
+gadget. Pointez avec la souris, le stick droit ou le doigt, **relâchez** — le
+gadget est sélectionné *et* déclenché d'un seul geste. Le nom et la
+description du secteur survolé s'affichent au-dessus de la roue.
+
+C'est l'alternative aux touches `1`–`8` : un seul schéma qui fonctionne
+identiquement à la souris, au stick et au doigt, sans rien à mémoriser. Les
+chiffres restent disponibles, et sont d'ailleurs rappelés dans chaque secteur
+pour qui veut y passer.
 
 Toutes les touches clavier et manette sont **reconfigurables** dans les options.
 

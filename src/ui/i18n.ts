@@ -37,6 +37,7 @@ const DICT: Record<string, Entry> = {
   contrast: ['Contraste élevé', 'High contrast'],
   aimAssist: ['Aide à la visée', 'Aim assist'],
   infiniteHp: ['Vie illimitée', 'Unlimited life'],
+  bestStreak: ['Meilleure série', 'Best streak'],
   showFps: ['Afficher les FPS', 'Show FPS'],
   quality: ['Qualité / résolution', 'Quality / resolution'],
   qualityAuto: ['Auto', 'Auto'],

@@ -23,6 +23,8 @@ export interface LevelResult {
   total: number;
   time: number;
   damage: number;
+  /** Meilleure serie de captures sans encaisser de coup. */
+  streak?: number;
   white: boolean;
   medal: Medal;
   unlocked: GadgetId | null;
@@ -138,6 +140,7 @@ export class ResultsScene extends Scene {
         [t('caught'), `${r.caught} / ${r.total}`],
         [t('time'), `${Math.floor(r.time / 60)}:${Math.floor(r.time % 60).toString().padStart(2, '0')} / ${def.targetTime}s`],
         [t('damage'), `${r.damage}`],
+        [t('bestStreak'), `×${r.streak ?? 0}`],
         [t('rareMouse'), r.white ? '✔' : '✘'],
       ];
       let ry = y + 200;

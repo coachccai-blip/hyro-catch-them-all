@@ -8,7 +8,7 @@ import { clamp, TAU, type Vec2 } from './math';
 
 export type ActionId =
   | 'up' | 'down' | 'left' | 'right'
-  | 'net' | 'sword' | 'interact' | 'jump' | 'dash'
+  | 'net' | 'sword' | 'interact' | 'jump' | 'dash' | 'radial'
   | 'gadgetNext' | 'gadgetPrev' | 'gadgetUse'
   | 'pause' | 'confirm' | 'cancel' | 'map';
 
@@ -22,6 +22,7 @@ export const ACTION_LABELS: Record<ActionId, { fr: string; en: string }> = {
   interact: { fr: 'Interagir', en: 'Interact' },
   jump: { fr: 'Saut', en: 'Jump' },
   dash: { fr: 'Ruée', en: 'Dash' },
+  radial: { fr: 'Roue des gadgets', en: 'Gadget wheel' },
   gadgetNext: { fr: 'Gadget suivant', en: 'Next gadget' },
   gadgetPrev: { fr: 'Gadget précédent', en: 'Prev gadget' },
   gadgetUse: { fr: 'Utiliser gadget', en: 'Use gadget' },
@@ -34,7 +35,7 @@ export const ACTION_LABELS: Record<ActionId, { fr: string; en: string }> = {
 /** Actions remappables proposees dans l'ecran d'options. */
 export const REMAPPABLE: ActionId[] = [
   'up', 'down', 'left', 'right',
-  'net', 'sword', 'jump', 'dash', 'gadgetUse', 'interact',
+  'net', 'sword', 'jump', 'dash', 'gadgetUse', 'radial', 'interact',
   'gadgetNext', 'gadgetPrev', 'pause',
 ];
 
@@ -58,6 +59,7 @@ export function defaultKeyBindings(): KeyBindings {
     dash: ['ShiftLeft', 'ShiftRight'],
     interact: ['KeyE'],
     gadgetUse: ['KeyF'],
+    radial: ['Tab', 'Mouse1'],
     gadgetNext: ['KeyX', 'WheelDown'],
     gadgetPrev: ['KeyC', 'WheelUp'],
     pause: ['Escape'],
@@ -80,6 +82,7 @@ export function defaultPadBindings(): PadBindings {
     dash: [1], // B / rond
     interact: [2], // X / carre
     gadgetUse: [6], // LT / L2
+    radial: [11], // clic stick droit
     gadgetNext: [4], // LB / L1
     gadgetPrev: [10], // clic stick gauche
     pause: [9], // Start
@@ -115,7 +118,7 @@ export interface TapEvent {
 }
 
 const ALL_ACTIONS: ActionId[] = [
-  'up', 'down', 'left', 'right', 'net', 'sword', 'jump', 'dash', 'interact',
+  'up', 'down', 'left', 'right', 'net', 'sword', 'jump', 'dash', 'radial', 'interact',
   'gadgetNext', 'gadgetPrev', 'gadgetUse', 'pause', 'confirm', 'cancel', 'map',
 ];
 
@@ -556,6 +559,7 @@ export class Input {
     if (code.startsWith('Arrow')) return { Up: '↑', Down: '↓', Left: '←', Right: '→' }[code.slice(5)] ?? code;
     if (code === 'Mouse0') return 'Clic G';
     if (code === 'Mouse1') return 'Clic M';
+    if (code === 'Tab') return 'Tab';
     if (code === 'Mouse2') return 'Clic D';
     if (code === 'WheelUp') return 'Molette ↑';
     if (code === 'WheelDown') return 'Molette ↓';

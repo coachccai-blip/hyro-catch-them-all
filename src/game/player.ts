@@ -26,6 +26,14 @@ const CAT_LENGTH = 78;
 const NET_RANGE = CAT_LENGTH;
 const NET_RADIUS = 58;
 const NET_COOLDOWN = 0.5;
+/**
+ * Bond du chat. Lancer le filet projette Hyro vers sa visee : le geste sert a
+ * la fois a combler la distance et a capturer. Sans lui, une souris qui court
+ * exactement aussi vite que le joueur ne se rattrape jamais — la poursuite
+ * n'avait aucune conclusion.
+ */
+const POUNCE_DIST = 86;
+const POUNCE_HEIGHT = 16;
 // --- Saut ---------------------------------------------------------------
 const JUMP_TIME = 0.46;
 const JUMP_DIST = 118;
@@ -111,6 +119,8 @@ export class Player {
   private vy = 0;
   private netTimer = 0;
   private netFired = false;
+  private pounceVx = 0;
+  private pounceVy = 0;
   netPoint: Vec2 = { x: 0, y: 0 };
   netFlash = 0;
   private swordTimer = 0;
@@ -486,15 +496,33 @@ export class Player {
     if (this.netTimer > 0) {
       this.netTimer -= dt;
       this.action = 1 - clamp01(this.netTimer / NET_COOLDOWN);
+      // Le bond se joue pendant l'armement, juste avant que le filet ne tombe
+      if (!this.netFired && (this.pounceVx || this.pounceVy)) {
+        const k = clamp01(this.action / NET_STRIKE_AT);
+        const ease = 1 - (1 - k) * (1 - k);
+        this.z = Math.sin(ease * Math.PI) * POUNCE_HEIGHT;
+        w.nav.moveAndSlide(this, this.pounceVx * dt, this.pounceVy * dt, this.caps);
+        this.move = 1;
+      }
       if (!this.netFired && this.action >= NET_STRIKE_AT) {
         this.netFired = true;
+        this.pounceVx = 0;
+        this.pounceVy = 0;
+        w.fx.dust(this.x, this.y + 4, 'rgba(255,255,255,0.55)', 4);
         this.strikeNet(w);
       }
       return;
     }
     if (cmd.net && !this.gliding) {
       const aimAng = Math.atan2(cmd.aimY - this.y, cmd.aimX - this.x);
-      const d = Math.min(NET_RANGE, dist(this.x, this.y, cmd.aimX, cmd.aimY));
+      const aimD = dist(this.x, this.y, cmd.aimX, cmd.aimY);
+      // Le bond couvre exactement l'exces de distance : viser tout pres ne
+      // declenche aucun saut, viser loin declenche le bond complet.
+      const leap = clamp(aimD - NET_RANGE, 0, POUNCE_DIST);
+      const travel = NET_COOLDOWN * NET_STRIKE_AT;
+      this.pounceVx = (Math.cos(aimAng) * leap) / travel;
+      this.pounceVy = (Math.sin(aimAng) * leap) / travel;
+      const d = Math.min(NET_RANGE + leap, aimD);
       this.netPoint = { x: this.x + Math.cos(aimAng) * d, y: this.y + Math.sin(aimAng) * d };
       this.dir = aimAng;
       this.netTimer = NET_COOLDOWN;

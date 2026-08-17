@@ -11,6 +11,7 @@ import { World } from '../game/world';
 import type { PlayerCmd } from '../game/player';
 import { Hud } from '../ui/hud';
 import { TUTORIALS } from '../ui/tutorials';
+import { RadialMenu } from '../ui/radial';
 import { drawGadgetIcon, drawMedal, drawNetIcon, drawSwordIcon } from '../game/gadgets';
 import { drawMouseIcon, drawMob } from '../render/characters';
 import { audio, type MusicId } from '../audio/audio';
@@ -25,6 +26,7 @@ export class PlayScene extends Scene {
   world!: World;
   hud = new Hud();
   private tutorialQueue: string[] = [];
+  private radial = new RadialMenu();
   private tutorialTimer = 0;
   private ended = false;
   private aim: Vec2 = { x: 0, y: 0 };
@@ -91,6 +93,7 @@ export class PlayScene extends Scene {
     this.world.peaceful = false;
 
     if (input.pressed('pause') && !this.ended) {
+      this.radial.cancel();
       this.game.push(new PauseScene(this));
       return;
     }
@@ -125,6 +128,14 @@ export class PlayScene extends Scene {
     }
     this.world.setAim(this.aim.x, this.aim.y);
 
+    // --- Roue des gadgets -----------------------------------------------------
+    // Maintenue, elle ralentit le monde ; relachee, elle selectionne ET
+    // declenche. C'est l'alternative aux touches 1-8, utilisable a la souris,
+    // au stick et au doigt.
+    const gadgetCount = this.world.player.gadgets.length;
+    const picked = this.radial.update(dt, input, view, gadgetCount, this.world.player.selected);
+    const wheelOpen = this.radial.open;
+
     // --- Gadget clique / tape -------------------------------------------------
     // La barre du bas est un vrai bouton : un clic (ou un appui) selectionne
     // l'emplacement **et** declenche le gadget. Le clic est alors consomme,
@@ -136,23 +147,24 @@ export class PlayScene extends Scene {
     for (const id of input.uiTaps) {
       if (id.startsWith('gslot')) slotClick = Number(id.slice(5));
     }
+    if (picked !== null) slotClick = picked;
 
     const cmd: PlayerCmd = {
       moveX: input.move.x,
       moveY: input.move.y,
       aimX: this.aim.x,
       aimY: this.aim.y,
-      net: (input.pressed('net') || input.aimReleased) && slotClick === null,
-      sword: input.pressed('sword'),
-      jump: input.pressed('jump'),
-      dash: input.pressed('dash'),
+      net: (input.pressed('net') || input.aimReleased) && slotClick === null && !wheelOpen,
+      sword: input.pressed('sword') && !wheelOpen,
+      jump: input.pressed('jump') && !wheelOpen,
+      dash: input.pressed('dash') && !wheelOpen,
       gadget: input.pressed('gadgetUse') || slotClick !== null,
       gadgetHeld: input.isDown('gadgetUse'),
       cycle: (input.pressed('gadgetNext') ? 1 : 0) - (input.pressed('gadgetPrev') ? 1 : 0) + Math.sign(input.wheel),
       slot: slotClick !== null ? slotClick + 1 : input.slotRequest,
     };
 
-    this.world.update(dt, cmd, input.pressed('interact'));
+    this.world.update(dt * this.radial.timeScale, cmd, input.pressed('interact') && !wheelOpen);
     this.hud.update(dt, this.world.hudState(), this.world.player.move > 0.1 || this.world.toastTimer > 0);
 
     // --- Evenements -----------------------------------------------------------
@@ -160,7 +172,7 @@ export class PlayScene extends Scene {
       const ev = this.world.events.shift()!;
       if (ev.type === 'win' && !this.ended) {
         this.ended = true;
-        const result = this.saveProgress(ev.caught, ev.total, ev.time, ev.damage, ev.white);
+        const result = this.saveProgress(ev.caught, ev.total, ev.time, ev.damage, ev.white, ev.streak);
         window.setTimeout(() => {
           this.game.transition(() => this.game.push(new ResultsScene(this.levelId, result)));
         }, 900);
@@ -180,7 +192,7 @@ export class PlayScene extends Scene {
     };
   }
 
-  private saveProgress(caught: number, total: number, time: number, damage: number, white: boolean) {
+  private saveProgress(caught: number, total: number, time: number, damage: number, white: boolean, streak = 0) {
     const def = getLevel(this.levelId)!;
     const save = this.game.save;
     const p = save.progress(this.levelId, total);
@@ -210,7 +222,7 @@ export class PlayScene extends Scene {
     save.touch();
     save.flush();
     const kinds = this.world.mice.filter((m) => m.captured).map((m) => m.kind as string);
-    return { caught, total, time, damage, white, medal, unlocked, quota: def.quota, kinds };
+    return { caught, total, time, damage, white, medal, unlocked, quota: def.quota, kinds, streak };
   }
 
   draw(ctx: Ctx) {
@@ -241,6 +253,8 @@ export class PlayScene extends Scene {
       outlinedText(ctx, getLang() === 'en' ? def.hintEn : def.hint, view.w / 2, view.h * 0.36 + 96, 22, '#c9d0e8', '#141a2b', 5, 'center', 'normal');
       ctx.restore();
     }
+
+    this.radial.draw(ctx, view, state.gadgets, state.cooldowns as Record<string, number>);
 
     if (this.tutorialQueue.length) this.drawTutorial(ctx);
 

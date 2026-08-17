@@ -34,7 +34,7 @@ const W1: LevelDef[] = [
     locks: ['hidden'],
     hint: 'Vise avec la souris, clic gauche pour lancer le filet.',
     hintEn: 'Aim with the mouse, left click to throw the net.',
-    tutorials: ['move', 'net', 'jump', 'dodge', 'chase', 'quota'],
+    tutorials: ['move', 'net', 'pounce', 'jump', 'dodge', 'chase', 'quota'],
   }),
   lvl({
     id: '1-2', world: 1, index: 2, name: 'Les Pots Renversés', nameEn: 'Toppled Pots',
@@ -45,7 +45,7 @@ const W1: LevelDef[] = [
     unlock: 'radar',
     hint: 'L\'épée assomme les souris et tue les cafards blindés.',
     hintEn: 'The sword stuns mice and kills armoured roaches.',
-    tutorials: ['sword', 'roach', 'holes'],
+    tutorials: ['sword', 'streak', 'roach', 'holes'],
   }),
   lvl({
     id: '1-3', world: 1, index: 3, name: 'Sous les Hortensias', nameEn: 'Under the Hydrangeas',
@@ -55,7 +55,7 @@ const W1: LevelDef[] = [
     locks: ['hidden', 'gap'],
     hint: 'Le radar révèle les souris cachées dans les buissons.',
     hintEn: 'The radar reveals mice hidden in bushes.',
-    tutorials: ['radar', 'hide'],
+    tutorials: ['radar', 'wheel', 'hide'],
   }),
   lvl({
     id: '1-4', world: 1, index: 4, name: 'L\'Allée du Nain', nameEn: 'Gnome Alley',

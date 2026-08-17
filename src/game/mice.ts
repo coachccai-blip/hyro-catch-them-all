@@ -155,6 +155,7 @@ export class MouseEnt implements IMouse {
   /** Une souris est capturable au filet si elle est au sol et pas trop rapide. */
   canBeCaught(w: IWorld): boolean {
     if (this.captured || this.dead) return false;
+    if (this.escapeGrace > 0) return false;
     // Une souris perchee n'est atteignable que si Hyro est lui aussi en
     // hauteur : sur la structure, en plein saut, ou en vol plane.
     if (this.inHole) return false;
@@ -168,6 +169,7 @@ export class MouseEnt implements IMouse {
 
   /** Raison affichee au joueur quand la capture echoue. */
   whyNot(w: IWorld): string {
+    if (this.escapeGrace > 0) return 'Elle file !';
     if (this.inHole) return 'Elle est dans un trou !';
     if (this.perched && !w.player.elevated) return 'En hauteur — saute !';
     if (this.prof.shadow && !w.radarActive && this.revealed <= 0) return 'Radar requis';
@@ -204,6 +206,36 @@ export class MouseEnt implements IMouse {
     this.dead = true;
   }
 
+  /**
+   * Elle se fait la belle : un coup encaisse par Hyro libere une prise du
+   * panier. Elle repart terrifiee, avec un court sursis pour qu'on ne la
+   * recapture pas dans la meme seconde — sinon l'enjeu disparait.
+   */
+  escape(x: number, y: number, w: IWorld) {
+    this.captured = false;
+    this.dead = false;
+    this.x = x;
+    this.y = y;
+    this.state = 'flee';
+    this.timer = 4;
+    this.lastSeen = 2;
+    this.home = { x, y };
+    this.inHole = false;
+    this.hiddenIn = false;
+    this.stun = 0;
+    this.glue = 0;
+    this.alpha = 1;
+    this.visible = true;
+    this.holeCd = 3;
+    this.dashCd = 0;
+    this.escapeGrace = 0.9;
+    w.fx.burstCapture(x, y - 10, this.color);
+    w.sfx('squeak', 0);
+  }
+
+  /** Sursis apres une evasion : intouchable au filet le temps de detaler. */
+  escapeGrace = 0;
+
   update(dt: number, w: IWorld) {
     if (this.captured) return;
     this.anim += dt;
@@ -215,6 +247,7 @@ export class MouseEnt implements IMouse {
     this.weaponCd -= dt;
     this.holeCd -= dt;
     this.harassCd -= dt;
+    this.escapeGrace = Math.max(0, this.escapeGrace - dt);
 
     // --- Dans un trou de souris : hors de portee, elle ressort ailleurs -----
     if (this.inHole) {

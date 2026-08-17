@@ -16,6 +16,18 @@ import {
 } from '../render/draw';
 import { t } from './i18n';
 
+/**
+ * Paliers de serie. Les seuils sont bas a dessein : la premiere recompense
+ * doit tomber vite, sinon personne ne decouvre le systeme.
+ */
+export const STREAK_TIERS = [
+  { at: 10, label: 'LÉGENDAIRE', color: '#ff6ad5' },
+  { at: 7, label: 'DÉCHAÎNÉ', color: '#ff9b3a' },
+  { at: 5, label: 'EN FEU', color: '#ffd166' },
+  { at: 3, label: 'EN SÉRIE', color: '#8cf0a0' },
+  { at: 2, label: 'DOUBLÉ', color: '#9ad0ff' },
+];
+
 export interface HudState {
   hp: number;
   maxHp: number;
@@ -25,6 +37,9 @@ export interface HudState {
   dodgeCd: number;
   /** Vie illimitee : les coeurs cedent la place a un symbole infini. */
   infiniteHp: boolean;
+  /** Serie de captures sans encaisser de coup. */
+  streak: number;
+  streakPop: number;
   total: number;
   gadgets: string[];
   selected: number;
@@ -43,9 +58,12 @@ export class Hud {
   private lastHp = 5;
   private lastCaught = 0;
   private counterPop = 0;
+  /** Horloge d'animation du HUD. */
+  private t = 0;
   touch: TouchButtonDef[] = [];
 
   update(dt: number, s: HudState, busy: boolean) {
+    this.t += dt;
     this.alpha = damp(this.alpha, busy ? 1 : 0.82, 5, dt);
     if (s.hp < this.lastHp) this.heartPop[s.hp] = 1;
     this.lastHp = s.hp;
@@ -79,6 +97,7 @@ export class Hud {
       { id: 'jump', action: 'jump', x: w - 262 * k, y: h - 262 * k, r: 52 * k, label: 'jump' },
       { id: 'dash', action: 'dash', x: w - 388 * k, y: h - 344 * k, r: 50 * k, label: 'dash' },
       { id: 'gadget', action: 'gadgetUse', x: w - 148 * k, y: h - 322 * k, r: 58 * k, label: 'gadget' },
+      { id: 'wheel', action: 'radial', x: w - 244 * k, y: h - 420 * k, r: 46 * k, label: 'wheel' },
       { id: 'cycle', action: 'gadgetNext', x: w - 106 * k, y: h - 452 * k, r: 40 * k, label: 'cycle' },
       { id: 'interact', action: 'interact', x: w - 382 * k, y: h - 218 * k, r: 40 * k, label: 'E' },
       { id: 'pause', action: 'pause', x: 58, y: 138, r: 34, label: 'pause' },
@@ -114,6 +133,7 @@ export class Hud {
           break;
         }
         case 'cycle': outlinedText(ctx, '⟳', b.x, b.y, s * 0.8, '#fff6e2'); break;
+        case 'wheel': outlinedText(ctx, '◎', b.x, b.y, s * 0.9, '#ffd166'); break;
         case 'jump': outlinedText(ctx, '⤒', b.x, b.y, s * 0.85, '#fff6e2'); break;
         case 'dash': outlinedText(ctx, '»', b.x, b.y, s * 0.9, '#9ad0ff'); break;
         case 'pause': outlinedText(ctx, '❚❚', b.x, b.y, s * 0.5, '#fff6e2'); break;
@@ -208,6 +228,25 @@ export class Hud {
     const kinds = s.caughtKinds.slice(-7);
     for (let i = 0; i < kinds.length; i++) {
       drawMouseIcon(ctx, cx + cw - 22 - i * 30, 122, 12, kinds[kinds.length - 1 - i]);
+    }
+
+    // --- Serie ---------------------------------------------------------------
+    // Elle a remplace la barre de vie comme source de tension : on ne perd plus
+    // la partie, on perd sa serie. Elle doit donc etre le second element le
+    // plus visible de l'ecran, juste apres le compteur de souris.
+    if (s.streak >= 2) {
+      const tier = STREAK_TIERS.find((t) => s.streak >= t.at) ?? STREAK_TIERS[STREAK_TIERS.length - 1];
+      const pop = 1 + s.streakPop * 0.5;
+      const sx = cx + cw / 2;
+      const sy = 182 * fs;
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.rotate(Math.sin(this.t * 3) * 0.03);
+      ctx.scale(pop, pop);
+      glow(ctx, 0, 0, 60 * fs, tier.color, 0.3 + s.streakPop * 0.4);
+      outlinedText(ctx, `×${s.streak}`, 0, 0, 40 * fs, tier.color, '#1a1226', 7);
+      outlinedText(ctx, tier.label, 0, 30 * fs, 17 * fs, '#fff6e2', '#1a1226', 4);
+      ctx.restore();
     }
 
     // --- Chrono -------------------------------------------------------------

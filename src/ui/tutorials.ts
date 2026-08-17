@@ -48,6 +48,27 @@ export const TUTORIALS: Record<string, TutorialCard> = {
     bodyEn: 'You cannot outrun a fleeing mouse: cut it off, corner it, stun it, or close the gap with a dash. And watch out — it turns around to bite. A red "!" telegraphs the charge.',
     icon: { kind: 'mouse', id: 'blue' },
   },
+  pounce: {
+    title: 'Le bond',
+    titleEn: 'The pounce',
+    body: 'Lancer le filet vers une cible lointaine propulse Hyro dessus. C\'est ta seule façon de rattraper une souris — viser loin, c\'est bondir loin.',
+    bodyEn: 'Throwing the net at a distant target launches Hyro at it. That is your only way to catch up with a mouse — aim far, leap far.',
+    icon: { kind: 'net', id: 'net' },
+  },
+  streak: {
+    title: 'Série',
+    titleEn: 'Streak',
+    body: 'Enchaîne les captures sans te faire toucher : la série monte. Un coup encaissé la brise **et libère ta dernière prise**, qui repart en courant. Protège ton panier !',
+    bodyEn: 'Chain captures without getting hit and the streak climbs. One hit breaks it **and frees your last catch**, which runs off. Protect your basket!',
+    icon: { kind: 'mouse', id: 'white' },
+  },
+  wheel: {
+    title: 'La roue des gadgets',
+    titleEn: 'The gadget wheel',
+    body: 'Maintiens Tab (ou clic molette, R3, bouton ◎) : le temps ralentit, pointe un gadget et relâche — il est choisi et déclenché d\'un coup.',
+    bodyEn: 'Hold Tab (or middle click, R3, the ◎ button): time slows, point at a gadget and release — it is picked and fired in one move.',
+    icon: { kind: 'gadget', id: 'radar' },
+  },
   holes: {
     title: 'Trous de souris',
     titleEn: 'Mouse holes',

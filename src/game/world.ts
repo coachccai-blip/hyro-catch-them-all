@@ -189,6 +189,13 @@ export class World implements IWorld, BossWorld {
   /** Message d'evasion affiche en grand. */
   escapeFlash = 0;
   /**
+   * Delai entre deux evasions. Sans lui, un joueur touche plusieurs fois de
+   * suite vide son panier plus vite qu'il ne le remplit : la sanction devient
+   * une spirale dont on ne sort pas. Un coup coute une prise, les suivants
+   * cassent seulement la serie.
+   */
+  private escapeCd = 0;
+  /**
    * Treve : le decor continue de vivre mais rien ne peut blesser Hyro. Actif
    * pendant les encarts de tutoriel, ou le joueur n'a aucun controle — sans
    * cela, des souris agressives le vident de ses coeurs pendant qu'il lit.
@@ -298,7 +305,10 @@ export class World implements IWorld, BossWorld {
       this.showToast(`Série brisée ! (x${this.streak})`, 1.6);
       this.streak = 0;
     }
-    this.releaseCaptured();
+    if (this.escapeCd <= 0) {
+      this.escapeCd = 7;
+      this.releaseCaptured();
+    }
   }
 
   spawnProjectile(x: number, y: number, vx: number, vy: number, owner: 'mob' | 'mouse', damage: number) {
@@ -634,6 +644,7 @@ export class World implements IWorld, BossWorld {
     this.shakePower = damp(this.shakePower, 0, 7, dt);
     this.toastTimer -= dt;
     this.streakPop = Math.max(0, this.streakPop - dt * 2.2);
+    this.escapeCd = Math.max(0, this.escapeCd - dt);
     this.escapeFlash = Math.max(0, this.escapeFlash - dt);
     this.radarPing = Math.max(0, this.radarPing - sdt);
     this.radarActive = this.player.radarOn && this.hasGadget('radar');
